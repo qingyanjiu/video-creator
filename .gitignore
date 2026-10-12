@@ -1,7 +1,15 @@
-# 产物
+# 生成物（脚本产出，不入库）
+#   build_content.py -> engine/content.js + timeline.json + src/timeline.js + tts/
+engine/content.js
+src/timeline.js
+timeline.json
+tts/
+
+# 渲染 / 编码 / 音频 / 校验产物
 out/
 preview/
 verify_frames/
+outputs/
 *.mp4
 audio.m4a
 mix.wav

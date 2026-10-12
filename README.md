@@ -16,16 +16,20 @@
 | `styles/*.json` | 皮肤：主题色 + 卡片/字幕/HUD 等视觉 token | 换风格时 |
 | `engine/engine.js` | 固化引擎：9 套版式模板 + 转场 + 字幕 + HUD，**代码内零文案** | ❌ |
 | `engine/render.html` | 渲染入口 | ❌ |
+| `engine/content.js` | **生成物**：内容 + 皮肤 + 时间轴的合并结果，渲染时读取（`build_content.py` 产出） | ❌ |
 | `src/assets/*.svg` | 人物插画（unDraw, MIT） | 换素材时 |
-| `src/timeline.js` | 自动生成的时间轴 | ❌ |
+| `src/timeline.js` | **生成物**：自动生成的时间轴 | ❌ |
 | `scripts/` | 管线与校验脚本 | ❌ |
 | `bootstrap.ps1` | **新环境一句话开工**：装依赖 → 出片 → 校验 | ❌ |
 | `install_deps.ps1` | 把依赖装进项目内 `deps\`（跑一次，之后免配环境变量） | ❌ |
 | `setenv.ps1` | 复用已有依赖时，一键配好 `PYTHONPATH` / `NODE_PATH` | ❌ |
 | `run.ps1` | 一键出片 | ❌ |
-| `tts/` | 配音 mp3 + 时长缓存 | ❌ |
-| `out/` | 渲染帧与成片 | ❌ |
+| `tts/` | **生成物**：配音 mp3 + 时长缓存 | ❌ |
+| `out/` | **生成物**：渲染帧与成片 | ❌ |
 | `docs/` | 提示词、版式说明、流程、踩坑记录 | — |
+
+> **生成物不进仓库**：`engine/content.js`、`timeline.json`、`src/timeline.js`、`tts/`、`out/`、`preview/`、`verify_frames/`、`audio.m4a`、`bgm.wav`
+> 全部由脚本产出，已写进 `.gitignore`。clone 下来跑一次 `.\bootstrap.ps1`（或 `python scripts\build_content.py content\child-insurance.json`）即可重建。
 
 ## 快速开始
 
