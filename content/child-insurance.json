@@ -1,0 +1,306 @@
+{
+  "meta": {
+    "slug": "child-insurance",
+    "title": "给孩子买保险",
+    "style": "warm",
+    "brand": "保险小课堂 · 儿童保险",
+    "disclaimer": "本内容仅为保险知识科普，不构成任何投保建议。",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+8%",
+    "fps": 30,
+    "size": [
+      1080,
+      1920
+    ],
+    "assetBase": "../src/assets/"
+  },
+  "assets": [
+    {
+      "name": "motherhood",
+      "file": "motherhood.svg"
+    },
+    {
+      "name": "fatherhood",
+      "file": "fatherhood.svg"
+    },
+    {
+      "name": "medicine",
+      "file": "medicine.svg"
+    },
+    {
+      "name": "skateboarding",
+      "file": "skateboarding.svg"
+    },
+    {
+      "name": "doctor",
+      "file": "doctor.svg"
+    },
+    {
+      "name": "savings",
+      "file": "savings.svg"
+    },
+    {
+      "name": "together",
+      "file": "together.svg"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "s1",
+      "tpl": "hook",
+      "accent": "coral",
+      "asset": "motherhood",
+      "narration": "给孩子买保险，顺序错了，钱就白花了。",
+      "title": "给孩子买保险",
+      "sub": "别被推销带跑偏",
+      "popups": [
+        [
+          "限时特惠",
+          "coral",
+          150,
+          0.9
+        ],
+        [
+          "99元起",
+          "orange",
+          830,
+          1.15
+        ],
+        [
+          "返还型",
+          "purple",
+          300,
+          1.0
+        ],
+        [
+          "分红型",
+          "blue",
+          780,
+          0.85
+        ],
+        [
+          "保本保息",
+          "mint",
+          190,
+          1.2
+        ],
+        [
+          "买它！",
+          "coral",
+          880,
+          1.05
+        ],
+        [
+          "爆款推荐",
+          "orange",
+          400,
+          0.95
+        ],
+        [
+          "免费领取",
+          "blue",
+          700,
+          1.25
+        ],
+        [
+          "倒计时",
+          "coral",
+          250,
+          1.1
+        ],
+        [
+          "限量名额",
+          "mint",
+          820,
+          0.8
+        ]
+      ]
+    },
+    {
+      "id": "s2",
+      "tpl": "step",
+      "accent": "orange",
+      "asset": "medicine",
+      "narration": "第一步，少儿医保，出生就去办，一年两三百块，性价比最高。",
+      "badge": {
+        "n": "1",
+        "label": "少儿医保",
+        "color": "orange"
+      },
+      "card": {
+        "title": "少儿医保",
+        "sub": "城乡居民基本医疗保险",
+        "value": "200-300",
+        "unit": "元 / 年",
+        "note": "出生即可办理"
+      },
+      "ribbon": "国家福利 · 性价比最高的打底"
+    },
+    {
+      "id": "s3",
+      "tpl": "chips",
+      "accent": "mint",
+      "asset": "skateboarding",
+      "narration": "孩子爱跑爱闹，意外险一年几十到一百多，一定要带意外医疗。",
+      "badge": {
+        "n": "2",
+        "label": "意外险",
+        "color": "blue"
+      },
+      "chips": [
+        [
+          "几十 ~ 一百多 / 年",
+          0.9,
+          560,
+          1116,
+          "blue"
+        ],
+        [
+          "含意外医疗 ✓",
+          1.5,
+          560,
+          1268,
+          "mint"
+        ]
+      ]
+    },
+    {
+      "id": "s4",
+      "tpl": "split",
+      "accent": "blue",
+      "asset": "doctor",
+      "narration": "第三步，百万医疗险，医保报完剩下的住院费它来兜，一年几百块。",
+      "badge": {
+        "n": "3",
+        "label": "医疗险",
+        "color": "blue"
+      },
+      "bar": [
+        "医保报销",
+        "自付部分"
+      ],
+      "panel": {
+        "title": "百万医疗",
+        "value": "保额 200 万+"
+      }
+    },
+    {
+      "id": "s5",
+      "tpl": "bigNumber",
+      "accent": "coral",
+      "asset": "fatherhood",
+      "narration": "第四步，重疾险。孩子真出事，家长得停工照顾，它补的是收入缺口。同预算，先做高保额，别为返还多花钱。",
+      "badge": {
+        "n": "4",
+        "label": "重疾险",
+        "color": "coral"
+      },
+      "value": {
+        "label": "保额",
+        "number": 50,
+        "unit": "万",
+        "note": "先做高保额",
+        "color": "orange",
+        "noteColor": "mint"
+      },
+      "tags": [
+        [
+          "康复费",
+          2.2,
+          780
+        ],
+        [
+          "营养费",
+          3.0,
+          895
+        ],
+        [
+          "家长误工费",
+          3.8,
+          1010
+        ]
+      ],
+      "warn": "返还型"
+    },
+    {
+      "id": "s6",
+      "tpl": "pitfalls",
+      "accent": "red",
+      "narration": "三个坑别踩：大人没保障先给娃买；买返还型、分红型；健康告知不说实话。",
+      "title": "三个坑，别踩",
+      "items": [
+        [
+          "大人没保障，先给娃买",
+          0.6
+        ],
+        [
+          "返还型 / 分红型",
+          2.6
+        ],
+        [
+          "健康告知不说实话",
+          4.6
+        ]
+      ]
+    },
+    {
+      "id": "s7",
+      "tpl": "coins",
+      "accent": "mint",
+      "asset": "savings",
+      "narration": "预算充足再考虑教育金，放在最后，保障做齐再理财。",
+      "badge": {
+        "n": "5",
+        "label": "教育金 / 年金",
+        "color": "mint"
+      },
+      "note": "保障做齐，再谈理财"
+    },
+    {
+      "id": "s8",
+      "tpl": "funnel",
+      "accent": "orange",
+      "narration": "记住顺序：医保、意外、医疗、重疾，最后才是教育金。",
+      "title": "正确顺序",
+      "sub": "先保障，后理财",
+      "steps": [
+        [
+          "医保",
+          "mint",
+          130
+        ],
+        [
+          "意外",
+          "blue",
+          200
+        ],
+        [
+          "医疗",
+          "orange",
+          270
+        ],
+        [
+          "重疾",
+          "coral",
+          340
+        ],
+        [
+          "教育金",
+          "purple",
+          400
+        ]
+      ],
+      "chain": "医保 → 意外 → 医疗 → 重疾 → 教育金"
+    },
+    {
+      "id": "s9",
+      "tpl": "outro",
+      "accent": "orange",
+      "asset": "together",
+      "narration": "先保大人后保小孩，先保障后理财。关注我，少花冤枉钱。",
+      "title": "先保大，后保小",
+      "sub": "先保障，后理财",
+      "cta": "关注我 · 少花冤枉钱"
+    }
+  ]
+}

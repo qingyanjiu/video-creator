@@ -1,0 +1,21 @@
+{
+  "name": "dark",
+  "label": "深色科技风",
+  "theme": {
+    "orange": "#FFA24D", "coral": "#FF6B7A", "mint": "#38E0B0", "blue": "#4DA6FF",
+    "red": "#FF5C7A", "purple": "#A98CFF", "yellow": "#FFD166",
+    "bg": "#0B1220", "bg2": "#141E33", "ink": "#EAF1FF", "ink2": "#8FA0C0"
+  },
+  "tokens": {
+    "card": "rgba(26,37,58,0.92)", "onAccent": "#0B1220",
+    "soft": "rgba(255,92,122,0.16)", "dash": "rgba(169,140,255,0.14)", "seal": "rgba(11,18,32,0.55)",
+    "headFrom": "#FFC98A", "sheen": "rgba(255,255,255,0.07)",
+    "coin": "#FFD166", "coinEdge": "#C99A2E", "coinInk": "#3A2A00",
+    "hudTrack": "rgba(255,255,255,0.12)", "hudChip": "rgba(255,255,255,0.08)",
+    "subBg": "rgba(10,16,28,0.86)", "subInk": "#EAF1FF", "subShadow": "rgba(0,0,0,0.55)",
+    "lineA": "rgba(77,166,255,0.20)", "splitLeft": "rgba(56,224,176,0.80)", "splitRight": "rgba(255,162,77,0.80)",
+    "walletDot": "#FFE0C2",
+    "outroBg1": "#0B1220", "outroBg2": "#101A2E", "outroBg3": "#16233C", "outroGlow": "#4DA6FF",
+    "shadow": "rgba(0,0,0,0.55)", "glow": 2.4
+  }
+}

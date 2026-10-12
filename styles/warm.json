@@ -1,0 +1,21 @@
+{
+  "name": "warm",
+  "label": "暖阳插画风（默认）",
+  "theme": {
+    "orange": "#FF8A3D", "coral": "#FF6F61", "mint": "#4FC3A1", "blue": "#5BA8F5",
+    "red": "#FF5A5F", "purple": "#9B8CF0", "yellow": "#FFC24B",
+    "bg": "#FDF8F1", "bg2": "#FFF1E0", "ink": "#3E3630", "ink2": "#7A6A5D"
+  },
+  "tokens": {
+    "card": "#FFFFFF", "onAccent": "#FFFFFF",
+    "soft": "#FFECEC", "dash": "#E7E2F7", "seal": "rgba(255,255,255,0.75)",
+    "headFrom": "#FF9E52", "sheen": "rgba(255,255,255,0.22)",
+    "coin": "#FFC24B", "coinEdge": "#E9A22B", "coinInk": "#B87A16",
+    "hudTrack": "rgba(62,54,48,0.10)", "hudChip": "rgba(255,255,255,0.92)",
+    "subBg": "rgba(255,255,255,0.94)", "subInk": "#3E3630", "subShadow": "rgba(60,45,30,0.16)",
+    "lineA": "rgba(91,168,245,0.30)", "splitLeft": "rgba(79,195,161,0.85)", "splitRight": "rgba(255,138,61,0.85)",
+    "walletDot": "#FFE0C2",
+    "outroBg1": "#FFF6E8", "outroBg2": "#FFE7CE", "outroBg3": "#FFD9BC", "outroGlow": "#FFC24B",
+    "shadow": "rgba(122,92,62,0.20)", "glow": 1
+  }
+}

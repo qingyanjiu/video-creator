@@ -1,0 +1,37 @@
+{
+  "motherhood": {
+    "accent": "#FF8A3D",
+    "recoloured": 24,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "fatherhood": {
+    "accent": "#FF6F61",
+    "recoloured": 27,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "medicine": {
+    "accent": "#4FC3A1",
+    "recoloured": 64,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "skateboarding": {
+    "accent": "#5BA8F5",
+    "recoloured": 4,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "doctor": {
+    "accent": "#5BA8F5",
+    "recoloured": 23,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "savings": {
+    "accent": "#FF8A3D",
+    "recoloured": 25,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "together": {
+    "accent": "#FF8A3D",
+    "recoloured": 3,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  }
+}
