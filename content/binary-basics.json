@@ -1,0 +1,100 @@
+{
+  "meta": {
+    "slug": "binary-basics",
+    "title": "二进制：电脑只会数到 1",
+    "style": "dark",
+    "brand": "二进制小课堂",
+    "disclaimer": "本片仅为计算机知识科普。",
+    "voice": "zh-CN-YunxiNeural",
+    "rate": "+8%",
+    "fps": 30,
+    "assetBase": "../src/assets/"
+  },
+  "assets": [
+    { "name": "coding", "file": "coding.svg" },
+    { "name": "server", "file": "server.svg" },
+    { "name": "matrix", "file": "matrix.svg" },
+    { "name": "devices", "file": "devices.svg" }
+  ],
+  "scenes": [
+    {
+      "id": "s1",
+      "tpl": "hook",
+      "accent": "coral",
+      "asset": "coding",
+      "narration": "电脑只会数两个数。",
+      "title": "电脑只会数到 1",
+      "sub": "0 和 1 就够了",
+      "popups": [
+        ["1010", "blue", 150, 0.9],
+        ["1111", "mint", 900, 1.15],
+        ["0110", "purple", 170, 1.0],
+        ["1001", "coral", 890, 0.85],
+        ["1100", "blue", 190, 1.2],
+        ["0011", "mint", 880, 1.05],
+        ["0101", "purple", 400, 0.95],
+        ["1011", "coral", 700, 1.25]
+      ]
+    },
+    {
+      "id": "s2",
+      "tpl": "chips",
+      "accent": "blue",
+      "asset": "server",
+      "narration": "每一位就是一个开关。",
+      "badge": { "n": "1", "label": "只有两位", "color": "blue" },
+      "chips": [
+        ["0 = 断电", 0.2, 560, 1116, "blue"],
+        ["1 = 通电", 0.6, 560, 1268, "mint"]
+      ]
+    },
+    {
+      "id": "s3",
+      "tpl": "funnel",
+      "accent": "mint",
+      "narration": "往前一位，位权翻倍。",
+      "title": "位权翻倍",
+      "sub": "从右往左读",
+      "steps": [
+        ["1", "mint", 130],
+        ["2", "blue", 200],
+        ["4", "orange", 270],
+        ["8", "coral", 340],
+        ["16", "purple", 400]
+      ],
+      "chain": "1 → 2 → 4 → 8 → 16"
+    },
+    {
+      "id": "s4",
+      "tpl": "bigNumber",
+      "accent": "purple",
+      "asset": "matrix",
+      "narration": "一零一一，就是十一。",
+      "badge": { "n": "2", "label": "读一个数", "color": "purple" },
+      "value": {
+        "label": "1011 等于",
+        "number": 11,
+        "unit": "十进制",
+        "note": "8 + 0 + 2 + 1",
+        "color": "orange",
+        "noteColor": "mint"
+      },
+      "tags": [
+        ["8", 0.26, 780],
+        ["2", 0.38, 895],
+        ["1", 0.5, 1010]
+      ],
+      "warn": "从左往右读"
+    },
+    {
+      "id": "s5",
+      "tpl": "outro",
+      "accent": "orange",
+      "asset": "devices",
+      "narration": "说到底，都是 0 和 1。",
+      "title": "0 和 1 撑起一切",
+      "sub": "这就是二进制",
+      "cta": "关注我 · 看懂计算机"
+    }
+  ]
+}

@@ -36,7 +36,10 @@ if ext is None:
 n_have = len([f for f in os.listdir(fdir) if f.startswith("f") and f.endswith("." + ext)])
 print("frames: %d 张  (%s)" % (n_have, fdir))
 if n_have != meta["frames"]:
-    print("警告：帧数 %d != 时间轴预期 %d，成片可能不完整" % (n_have, meta["frames"]))
+    raise SystemExit(
+        "帧数 %d != 时间轴预期 %d（%s）。\n"
+        "  多了：目录里有上一次渲染的残留帧，重跑 node scripts/render_frames.js png（它会先清目录）。\n"
+        "  少了：渲染中途断了，重跑渲染。" % (n_have, meta["frames"], fdir))
 
 # 帧率一律从 timeline.json 取——它由 content.json 的 meta.fps 生成，
 # 渲染脚本也是按同一个值算帧数的。这里若写死，帧数和播放速率就会对不上。

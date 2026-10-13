@@ -42,6 +42,22 @@ const easeInOutCubic = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3)
 const easeOutBack = p => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
 const seg = (t, a, b) => clamp01((t - a) / (b - a));
 
+/* ---------- 字幕几何 ----------
+   字幕气泡的尺寸与位置只在这里定义；scene1 的弹窗避让带由 SUB_AVOID 自动
+   推出来，不要再写死数字——以前两处各写一份，改一处必然让另一半失配。 */
+const SUB = { size: 52, maxW: 880, maxChars: 17, maxLines: 2,
+              lineH: 76, padX: 52, padY: 34, radius: 44, bottom: 1545, fade: 0.16 };
+/* 两行字幕时气泡的最高顶边（subtract 的是 drawSubtitle 里同一个 bh 公式） */
+const SUB_TOP = SUB.bottom - (SUB.maxLines * SUB.lineH + SUB.padY * 2 - 14);
+/* 弹窗雨要避开的纵向带：上沿再留 9px、下沿再留 35px，feather 是淡出宽度 */
+const SUB_AVOID = { top: SUB_TOP - 9, bot: SUB.bottom + 35, feather: 110 };
+
+/* ---------- 节奏 ----------
+   每镜留白与转场时长由 content.json 的 meta.pace 决定，build_content.py 写进
+   src/timeline.js 的 window.PACE。用 window 属性而不是 const，免得和那边重复声明。
+   这里保留默认值，是为了 timeline.js 没重新生成时不至于整个渲染挂掉。 */
+const PACE = window.PACE || { lead: 0.30, tail: 0.36, lastTail: 1.20, transition: 0.45 };
+
 /* ---------- 节拍：动画挂在配音上，而不是挂在写死的秒数上 ----------
    场景时长 dur = LEAD + 本镜配音实测时长 + TAIL，是内容驱动的变量；
    所以关键帧一律用"解说进行到几成"来表达，由 beats()/bs() 换算成秒。 */
@@ -175,7 +191,7 @@ function splitLines(text) {
   const parts = text.split(/(?<=[，。；：！？、])/).filter(s => s.length);
   const out = []; let cur = '';
   for (const p of parts) {
-    if ((cur + p).length <= 17) cur += p;
+    if ((cur + p).length <= SUB.maxChars) cur += p;
     else { if (cur) out.push(cur); cur = p; }
   }
   if (cur) out.push(cur);
@@ -198,8 +214,8 @@ function activeSub(i, t) {
   for (let k = 0; k < arr.length; k++) {
     const a = arr[k];
     if (t >= a.t0 && (t < a.t1 || k === arr.length - 1)) {
-      const fi = clamp01((t - a.t0) / 0.16);
-      const fo = k === arr.length - 1 ? 1 : clamp01((a.t1 - t) / 0.16);
+      const fi = clamp01((t - a.t0) / SUB.fade);
+      const fo = k === arr.length - 1 ? 1 : clamp01((a.t1 - t) / SUB.fade);
       return { text: a.text, a: Math.min(fi, fo) };
     }
   }
@@ -234,7 +250,7 @@ function stepBadge(ctx, n, label, color, p) {
 
 /* =========================== 场景 1 · 钩子 =========================== */
 function scene1(ctx, t, dur, i) {
-  const c = SCN(0);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   const p = easeOutCubic(lseg(t, i, 0.50));
   txt(ctx, c.title, W / 2, lerp(430, 388, p), 78, C.ink, 800);
@@ -250,9 +266,10 @@ function scene1(ctx, t, dur, i) {
     const y = ((t * 300 * spd + k * 220) % (H + 520)) - 260;
     const x = clamp(x0 + Math.sin(t * 1.6 + k) * 22, 100, W - 100);
     const wChip = width(ctx, label, 36, 700) + 62;
-    /* 字幕气泡大致占 y∈[1355,1545]：进入该带淡出、离开再淡入，
-       视觉上读作"从字幕后面穿过"，而不是被气泡切掉一半 */
-    const inBand = clamp01((y - 1330) / 110) * (1 - clamp01((y - 1580) / 110));
+    /* 进入字幕带淡出、离开再淡入：视觉上读作"从字幕后面穿过"，
+       而不是被气泡切掉一半。带的上下沿用 SUB_AVOID，跟着字幕几何走。 */
+    const inBand = clamp01((y - SUB_AVOID.top) / SUB_AVOID.feather)
+                 * (1 - clamp01((y - SUB_AVOID.bot) / SUB_AVOID.feather));
     ctx.save(); ctx.globalAlpha = 0.92 * clamp01(t / 0.4) * (1 - inBand);
     ctx.translate(x, y); ctx.rotate(Math.sin(t * 1.1 + k * 2) * 0.09);
     shadow(ctx, 22, 9); box(ctx, -wChip / 2, -38, wChip, 76, 38, C.card); noShadow(ctx);
@@ -266,7 +283,7 @@ function scene1(ctx, t, dur, i) {
 
 /* =========================== 场景 2 · 少儿医保 =========================== */
 function scene2(ctx, t, dur, i) {
-  const c = SCN(1);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
@@ -323,7 +340,7 @@ function scene2(ctx, t, dur, i) {
 
 /* =========================== 场景 3 · 意外险 =========================== */
 function scene3(ctx, t, dur, i) {
-  const c = SCN(2);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
@@ -346,7 +363,7 @@ function scene3(ctx, t, dur, i) {
 
 /* =========================== 场景 4 · 医疗险 =========================== */
 function scene4(ctx, t, dur, i) {
-  const c = SCN(3);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
@@ -410,14 +427,18 @@ function scene4(ctx, t, dur, i) {
 
 /* =========================== 场景 5 · 重疾险 =========================== */
 function scene5(ctx, t, dur, i) {
-  const c = SCN(4);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
   const vp = bseg(t, i, 0.02, 0.55);
   if (vp > 0) {
     const e = easeOutCubic(vp);
-    const val = Math.round(easeOutCubic(bseg(t, i, 0.04, 2.40)) * c.value.number);
+    /* 滚动时长跟着本镜时长走。写死 2.4s 的话，60s 片的 11s 镜没问题，
+       但 15s 片的 2.9s 镜会「数字刚停就切」——终值根本没时间被看见。
+       0.42 是让终值至少留出半镜；长镜仍取 2.40，行为和以前一致。 */
+    const roll = Math.min(2.40, beats(i).dur * 0.42);
+    const val = Math.round(easeOutCubic(bseg(t, i, 0.04, roll)) * c.value.number);
     const br = settle(t, i, 0.02, 0.55);          // 保额卡片落位后的呼吸
     ctx.save(); ctx.globalAlpha = e;
     ctx.translate(540, 545); ctx.scale((0.9 + 0.1 * e) * br, (0.9 + 0.1 * e) * br);
@@ -463,7 +484,7 @@ function scene5(ctx, t, dur, i) {
 
 /* =========================== 场景 6 · 三个坑 =========================== */
 function scene6(ctx, t, dur, i) {
-  const c = SCN(5);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   txt(ctx, c.title, W / 2, 420, 72, C.ink, 800);
   const cards = c.items;
@@ -488,7 +509,7 @@ function scene6(ctx, t, dur, i) {
 
 /* =========================== 场景 7 · 教育金 =========================== */
 function scene7(ctx, t, dur, i) {
-  const c = SCN(6);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
@@ -519,7 +540,7 @@ function scene7(ctx, t, dur, i) {
 
 /* =========================== 场景 8 · 总结 =========================== */
 function scene8(ctx, t, dur, i) {
-  const c = SCN(7);
+  const c = SCN(i);
   bgBase(ctx, t, CL(c.accent));
   txt(ctx, c.title, W / 2, 400, 72, C.ink, 800);
   txt(ctx, c.sub, W / 2, 492, 40, C.ink2, 600);
@@ -568,7 +589,7 @@ function scene8(ctx, t, dur, i) {
 
 /* =========================== 场景 9 · 结尾 =========================== */
 function scene9(ctx, t, dur, i) {
-  const c = SCN(8);
+  const c = SCN(i);
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, C.outroBg1); g.addColorStop(0.55, C.outroBg2); g.addColorStop(1, C.outroBg3);
   ctx.fillStyle = g; ctx.fillRect(-24, -24, W + 48, H + 48);   // 同 bgBase：为摄影机漂移留出 overscan
@@ -617,7 +638,7 @@ function drawHud(ctx, t) {
 function drawSubtitle(ctx, sub) {
   if (!sub || sub.a <= 0.01) return;
   ctx.save(); ctx.globalAlpha = sub.a;
-  const size = 52, maxW = 880;
+  const size = SUB.size, maxW = SUB.maxW;
   let lines = [sub.text];
   let wMax = width(ctx, sub.text, size, 600);
   if (wMax > maxW) {
@@ -625,11 +646,11 @@ function drawSubtitle(ctx, sub) {
     lines = [sub.text.slice(0, mid), sub.text.slice(mid)];
     wMax = Math.max(width(ctx, lines[0], size, 600), width(ctx, lines[1], size, 600));
   }
-  const lh = 76, padX = 52, padY = 34;
+  const lh = SUB.lineH, padX = SUB.padX, padY = SUB.padY;
   const bwid = wMax + padX * 2, bh = lines.length * lh + padY * 2 - 14;
-  const bx = W / 2 - bwid / 2, by = 1545 - bh;
+  const bx = W / 2 - bwid / 2, by = SUB.bottom - bh;
   shadow(ctx, 30, 12, C.subShadow);
-  box(ctx, bx, by, bwid, bh, 44, C.subBg); noShadow(ctx);
+  box(ctx, bx, by, bwid, bh, SUB.radius, C.subBg); noShadow(ctx);
   lines.forEach((l, i) => txt(ctx, l, W / 2, by + padY + lh / 2 + i * lh - 7, size, C.subInk, 600));
   ctx.restore();
 }
@@ -638,7 +659,7 @@ function drawSubtitle(ctx, sub) {
 const TPL = { hook: scene1, step: scene2, chips: scene3, split: scene4,
               bigNumber: scene5, pitfalls: scene6, coins: scene7, funnel: scene8, outro: scene9 };
 const sceneFn = i => TPL[SCN(i).tpl] || scene1;
-const TRANS = 0.45;
+const TRANS = PACE.transition;   // 来自 content.json 的 meta.pace，见文件顶部
 
 const main = document.getElementById('c');
 const mctx = main.getContext('2d');

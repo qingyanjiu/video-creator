@@ -23,7 +23,9 @@
 | `bootstrap.ps1` | **新环境一句话开工**：装依赖 → 出片 → 校验 | ❌ |
 | `install_deps.ps1` | 把依赖装进项目内 `deps\`（跑一次，之后免配环境变量） | ❌ |
 | `setenv.ps1` | 复用已有依赖时，一键配好 `PYTHONPATH` / `NODE_PATH` | ❌ |
-| `run.ps1` | 一键出片 | ❌ |
+| `run.ps1` | 一键出片（Windows） | ❌ |
+| `scripts/pipe.py` | 一键出片的跨平台版（mac / Linux / Windows 都能跑） | ❌ |
+| `.claude/skills/new-video/` | 让 Claude Code 直接出片：问需求 → 逐项确认 → 生成 → 抽帧确认 → 出片 | ❌ |
 | `tts/` | **生成物**：配音 mp3 + 时长缓存 | ❌ |
 | `out/` | **生成物**：渲染帧与成片 | ❌ |
 | `docs/` | 提示词、版式说明、流程、踩坑记录 | — |
@@ -75,6 +77,41 @@ python scripts\encode.py
 >   的顺序探测，并且**真的 import 一次**验证（还会查 `imageio_ffmpeg.get_ffmpeg_exe` 这类关键属性，防"装了个半成品"）——验过了才设变量，坏了会被标红。
 > - 两个都不跑也行：`run.ps1` 检测到环境变量没配会自动加载 `setenv.ps1`。
 
+### macOS / Linux
+
+上面的 `run.ps1` / `setenv.ps1` / `bootstrap.ps1` 是 PowerShell 专用。非 Windows 用 `scripts/pipe.py`——
+它自己配好 `deps/venv`、`deps/node_modules`、`RENDER_HTML`，和 `run.ps1` 的步骤顺序一致：
+
+```bash
+python3 scripts/pipe.py check                                    # 依赖自检
+python3 scripts/pipe.py preview content/child-insurance.json --times auto
+python3 scripts/pipe.py all content/child-insurance.json --name "给孩子买保险-科普短片"
+```
+
+`--times auto` 会从 `timeline.json` 每镜取一点（解说进行到 65% 处，元素都已落位），抽 6 帧铺满全片。
+要单独看某一镜就传秒数：`--times 14.7,40.4`。子命令还有 `build` / `render` / `audio` / `encode`，可以分步跑。
+
+### 让 Claude Code 出片
+
+仓库里带了 skill `.claude/skills/new-video/`。在项目里对 Claude Code 说"做一条关于 X 的科普视频"，
+它会读 `content/schema.json`，把主题、品牌胶囊、免责声明、配色、音色问清楚，起草 9 镜分镜给你改，
+落成 `content/<slug>.json`，跑校验，**抽 6 帧给你看过之后**才做全量渲染。
+
+## 能配什么
+
+**唯一真相是 [content/schema.json](content/schema.json)**：每个字段的必填/选填、类型、取值范围、默认值都在里面。
+`scripts/build_content.py` 按它校验，写错会直接报错并指出位置——`tpl` 拼错、插画名打错、色名写错这类，
+以前都是**悄悄画错**不报错的。
+
+| 层 | 配什么 | 入口 |
+|---|---|---|
+| 内容 | 分镜文案、版式、素材、卡片文字 | `content/*.json` 的 `scenes` |
+| 配色 | 主题色 + 卡片/字幕/HUD 色板 | `meta.style`，或 `theme` 单项覆盖 |
+| 节奏 | 每镜留白、转场时长 | `meta.pace` |
+| 帧率 | 整片帧率 | `meta.fps` |
+| 配音 | 音色、语速 | `meta.voice` / `meta.rate` |
+| 输出 | 目录、文件名 | `OUT_DIR` / `OUT_NAME` 环境变量 |
+
 ## 换风格
 
 改 `content/*.json` 里的 `meta.style`：
@@ -105,12 +142,33 @@ python scripts\encode.py
 
 > 注意：降帧率省的是渲染时间和磁盘，**不是 token**。渲染/编码是本地 Playwright + ffmpeg，不经过模型。
 
+## 换节奏
+
+`content/*.json` 里的 `meta.pace`，四项都是秒，不写就用默认值：
+
+```json
+{ "meta": { "pace": { "lead": 0.3, "tail": 0.36, "lastTail": 1.2, "transition": 0.45 } } }
+```
+
+| 项 | 含义 | 默认 |
+|---|---|---|
+| `lead` | 每镜配音**前**的留白，徽标与大标题在这段里落位 | 0.30 |
+| `tail` | 配音后的余量（除最后一镜） | 0.36 |
+| `lastTail` | 最后一镜配音后的余量，给收尾留时间 | 1.20 |
+| `transition` | 相邻两镜交叉溶解的时长 | 0.45 |
+
+**调它只改时长、不改画面**，是「利落版 / 从容版」最便宜的开关。`lead` 从 0.30 提到 0.60 会多出约 2.7 秒——
+渲染帧数和成片长度都跟着变，但要重跑 `build_content.py`。
+
 ## 换选题
 
 复制一份 `content/child-insurance.json`，改 `narration` 文案和各版式的字段即可。
 `narration` 一变，配音自动重做，时间轴自动重算——**不需要手工调任何时间**。
 
 ## 校验
+
+`build_content.py` 出片前先按 `content/schema.json` 校验内容，字段写错会直接报错并指出位置。
+其余脚本按需跑：
 
 | 脚本 | 作用 |
 |---|---|

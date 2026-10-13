@@ -20,8 +20,15 @@ deps/
 node_modules/
 pylibs/
 
-# 系统
+# 编辑器 / 系统
 Thumbs.db
 .DS_Store
 __pycache__/
 *.pyc
+.vscode/
+.idea/
+
+# Claude Code：本地个人配置不入库（技能本身 .claude/skills/ 要入库）
+.claude/settings.local.json
+.claude/*.local.json
+CLAUDE.local.md

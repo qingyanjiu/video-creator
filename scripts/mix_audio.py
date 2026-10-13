@@ -31,7 +31,11 @@ bgm = np.zeros((N + SR, 2))
 raw = subprocess.run([FF, "-v", "error", "-i", os.path.join(WORK, "bgm.wav"),
                       "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], capture_output=True).stdout
 b = np.frombuffer(raw, dtype="<f4").astype(np.float64).reshape(-1, 2)
-bgm[:len(b)] = b
+# bgm.wav 是上一次生成的，长度和本条片子无关：比片子长就截，比片子短就循环铺满。
+# （以前写成 bgm[:len(b)] = b，只在配乐不长于片子时成立，做短片必炸。）
+if len(b) < len(bgm):
+    b = np.tile(b, (int(np.ceil(len(bgm) / max(1, len(b)))), 1))
+bgm[:] = b[:len(bgm)]
 bgm = bgm[:N]
 
 

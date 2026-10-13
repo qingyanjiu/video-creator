@@ -1,47 +1,285 @@
 # -*- coding: utf-8 -*-
 """content.json  ->  content.js + timeline.json + src/timeline.js
 
-唯一的内容入口是 work/engine/content.json。
+唯一的内容入口是 content/<x>.json；能配什么写在 content/schema.json。
 配音按需生成：narration 文本哈希未变则复用已有 mp3，不再联网。
 """
 import asyncio, hashlib, json, os, re, subprocess, sys
+
 WORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINE = os.path.join(WORK, "engine")
+STYLES = os.path.join(WORK, "styles")
 _rel = sys.argv[1] if len(sys.argv) > 1 else os.path.join("content", "child-insurance.json")
 CONTENT_PATH = _rel if os.path.isabs(_rel) else os.path.join(WORK, _rel)
 if not os.path.exists(CONTENT_PATH):
     raise SystemExit("content file not found: " + CONTENT_PATH)
 CONTENT = json.load(open(CONTENT_PATH, encoding="utf-8"))
+SCHEMA = json.load(open(os.path.join(WORK, "content", "schema.json"), encoding="utf-8"))
 TTS_DIR = os.path.join(WORK, "tts")
 os.makedirs(TTS_DIR, exist_ok=True)
 
-LEAD, TAIL, LAST_TAIL = 0.30, 0.36, 1.20
-FPS = CONTENT["meta"].get("fps", 30)
-if not isinstance(FPS, int) or isinstance(FPS, bool) or not 10 <= FPS <= 120:
-    raise SystemExit("meta.fps 应为 10–120 的整数，当前是 %r。\n"
-                     "  这个内容里最快的动效是抖动（约 4.8Hz），低于 20fps 会明显抖；"
-                     "30 是默认值。" % (FPS,))
+
+# ============================ 校验 =========================================
+# 配置面全在 content/schema.json。以前写错字段是静默降级（tpl 拼错悄悄变
+# 成钩子镜、asset 名打错那镜没插画、色键写错被引擎忽略），肉眼看不出来——
+# 所以在这里全部挡住。
+BADGE_FIELDS = {
+    "n":     {"type": "string", "required": True, "label": "序号"},
+    "label": {"type": "string", "required": True, "label": "名称"},
+    "color": {"type": "color",  "required": True, "label": "颜色"},
+}
+_HEX = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+_RGBA = re.compile(r"^rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(,\s*[\d.]+\s*)?\)$")
+_TY = {str: "字符串", int: "整数", float: "小数", bool: "布尔",
+       list: "数组", dict: "对象", type(None): "null"}
 
 
-def _check_beats():
-    """chips / tags / items 的时间项是"解说进行到几成"(0-1)，不是秒。
-
-    写错不会报错，只会让元素在该出现的时候不出现（秒数被 clamp 成 1.0 或 0），
-    很难看画面看出来——所以在这里挡住。"""
-    fields = [("chips", 1), ("tags", 1), ("items", 1)]
-    bad = []
-    for sc in CONTENT["scenes"]:
-        for name, idx in fields:
-            for row in sc.get(name) or []:
-                v = row[idx]
-                ok = isinstance(v, (int, float)) and not isinstance(v, bool) and 0.0 <= v <= 1.0
-                if not ok:
-                    bad.append("%s.%s %r 的解说进度=%r（应为 0-1 的比例，不是秒）"
-                               % (sc["id"], name, row[0], v))
-    if bad:
-        raise SystemExit("content 校验失败：\n  " + "\n  ".join(bad))
+def _ty(v):
+    return _TY.get(type(v), type(v).__name__)
 
 
+def _is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _is_empty(v):
+    return v is None or (isinstance(v, str) and not v.strip()) \
+        or (isinstance(v, (list, dict)) and not v)
+
+
+def _engine_theme_keys():
+    """从 engine.js 的 `const C = {...}` 抠出可覆写的色键——引擎才是真相。
+
+    C 里一行挤了好几个键，所以不能按行锚定；先把注释去掉再全局找 `名字:`。
+    """
+    src = open(os.path.join(ENGINE, "engine.js"), encoding="utf-8").read()
+    m = re.search(r"const C = \{(.*?)\n\};", src, re.S)
+    if not m:
+        raise SystemExit("读不到 engine/engine.js 里的 `const C = {...}`，无法核对色板键")
+    body = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
+    return sorted(set(re.findall(r"([A-Za-z_]\w*)\s*:", body)))
+
+
+class Ctx:
+    def __init__(self):
+        self.errs = []
+        self.accents = set(SCHEMA["colors"]["accent"])
+        self.theme_keys = set(_engine_theme_keys())
+        self.assets = set()
+
+    def fail(self, path, msg):
+        self.errs.append("%s %s" % (path, msg))
+
+    def check_schema_sync(self):
+        """schema 的 themeKeys 必须与引擎的 C 一致，否则校验会放进写错的键。"""
+        real, decl = sorted(self.theme_keys), sorted(SCHEMA["colors"]["themeKeys"])
+        miss, extra = sorted(set(real) - set(decl)), sorted(set(decl) - set(real))
+        if miss or extra:
+            raise SystemExit(
+                "content/schema.json 的 colors.themeKeys 与 engine.js 的 C 不一致：\n"
+                + ("  schema 缺：%s\n" % ", ".join(miss) if miss else "")
+                + ("  schema 多：%s\n" % ", ".join(extra) if extra else "")
+                + "  同步 content/schema.json 后再重跑。")
+
+
+def _range(ctx, spec, val, path, extra=""):
+    if "min" in spec and val < spec["min"]:
+        return ctx.fail(path, "不能小于 %s（当前 %s）%s" % (spec["min"], val, extra))
+    if "max" in spec and val > spec["max"]:
+        return ctx.fail(path, "不能大于 %s（当前 %s）%s" % (spec["max"], val, extra))
+
+
+def _check(ctx, spec, val, path):
+    """按 schema 的字段规格校验一个值。"""
+    t = spec["type"]
+    hint = ("（%s）" % spec["label"]) if spec.get("label") else ""
+
+    if t == "string":
+        if not isinstance(val, str):
+            return ctx.fail(path, "应为字符串%s，当前是 %s" % (hint, _ty(val)))
+        if spec.get("pattern") and not re.match(spec["pattern"], val):
+            return ctx.fail(path, "格式不对%s：%r（应匹配 %s）" % (hint, val, spec["pattern"]))
+        if "minLen" in spec and len(val) < spec["minLen"]:
+            return ctx.fail(path, "太短%s：%d 字，至少 %d 字" % (hint, len(val), spec["minLen"]))
+        if "maxLen" in spec and len(val) > spec["maxLen"]:
+            return ctx.fail(path, "太长%s：%d 字，最多 %d 字" % (hint, len(val), spec["maxLen"]))
+        return
+
+    if t == "int":
+        if not isinstance(val, int) or isinstance(val, bool):
+            return ctx.fail(path, "应为整数%s，当前是 %s" % (hint, _ty(val)))
+        return _range(ctx, spec, val, path)
+
+    if t in ("number", "fraction"):
+        if not _is_num(val):
+            return ctx.fail(path, "应为数字%s，当前是 %s" % (hint, _ty(val)))
+        if t == "fraction":
+            return _range(ctx, dict(spec, min=0, max=1), val, path,
+                          extra="（%s是 0–1 的解说进度，不是秒）" % spec.get("label", "这里"))
+        return _range(ctx, spec, val, path)
+
+    if t == "enum":
+        if val not in spec["values"]:
+            return ctx.fail(path, "只能是 %s 之一%s，当前是 %r"
+                            % (" / ".join(map(str, spec["values"])), hint, val))
+        return
+
+    if t == "color":
+        if isinstance(val, str) and (val in ctx.accents or _HEX.match(val) or _RGBA.match(val)):
+            return
+        return ctx.fail(path, "不是合法颜色%s：%r（可用色名 %s，或 #RRGGBB / rgba(...)）"
+                        % (hint, val, " / ".join(sorted(ctx.accents))))
+
+    if t == "asset":
+        if not isinstance(val, str):
+            return ctx.fail(path, "应为素材名%s，当前是 %s" % (hint, _ty(val)))
+        if val not in ctx.assets:
+            return ctx.fail(path, "没有这个插画：%r（assets 里只有 %s）"
+                            % (val, " / ".join(sorted(ctx.assets)) or "（空）"))
+        return
+
+    if t == "tuple":
+        n = len(spec["of"])
+        if not isinstance(val, list) or len(val) != n:
+            return ctx.fail(path, "应为 %d 项数组%s，当前是 %r" % (n, hint, val))
+        labels = spec.get("labels") or []
+        for k, sub in enumerate(spec["of"]):
+            sub_spec = {"type": sub}
+            if k < len(labels):
+                sub_spec["label"] = labels[k]
+            _check(ctx, sub_spec, val[k], "%s[%d]" % (path, k))
+        return
+
+    if t == "list":
+        if not isinstance(val, list):
+            return ctx.fail(path, "应为数组%s，当前是 %s" % (hint, _ty(val)))
+        if "min" in spec and len(val) < spec["min"]:
+            return ctx.fail(path, "只有 %d 项%s，至少 %d 项" % (len(val), hint, spec["min"]))
+        if "max" in spec and len(val) > spec["max"]:
+            return ctx.fail(path, "有 %d 项%s，最多 %d 项" % (len(val), hint, spec["max"]))
+        for k, it in enumerate(val):
+            _check(ctx, spec["item"], it, "%s[%d]" % (path, k))
+        return
+
+    if t in ("object", "badge"):
+        return _check_fields(ctx, BADGE_FIELDS if t == "badge" else spec["fields"], val, path)
+
+    ctx.fail(path, "schema 里有个不认识的类型 %r（schema 自身的问题）" % t)
+
+
+def _check_fields(ctx, fields, obj, path):
+    """按 fields 规格校验对象：未知字段、缺必填、逐项类型。"""
+    if not isinstance(obj, dict):
+        return ctx.fail(path, "应为对象，当前是 %s" % _ty(obj))
+    for k in obj:
+        if k not in fields:
+            ctx.fail("%s.%s" % (path, k), "不认识的字段（可用：%s）" % " / ".join(sorted(fields)))
+    for k, sub in fields.items():
+        if k not in obj:
+            if sub.get("required"):
+                ctx.fail("%s.%s" % (path, k), "缺必填字段（%s）" % sub.get("label", k))
+            continue
+        if sub.get("required") and _is_empty(obj[k]):
+            ctx.fail("%s.%s" % (path, k), "不能为空（%s）" % sub.get("label", k))
+            continue
+        _check(ctx, sub, obj[k], "%s.%s" % (path, k))
+
+
+def validate():
+    """校验整份 content。有任何问题就一次性列全再退出。"""
+    ctx = Ctx()
+    ctx.check_schema_sync()
+    ctx.assets = {a.get("name") for a in (CONTENT.get("assets") or []) if isinstance(a, dict)}
+
+    meta = CONTENT.get("meta")
+    if not isinstance(meta, dict):
+        raise SystemExit("content 缺少 meta 对象")
+    for k in meta:
+        if k not in SCHEMA["meta"]:
+            hint = "（画布固定 1080×1920，不是配置项）" if k == "size" \
+                else "（可用：%s）" % " / ".join(sorted(SCHEMA["meta"]))
+            ctx.fail("meta.%s" % k, "不认识的字段%s" % hint)
+    _check_fields(ctx, SCHEMA["meta"], meta, "meta")
+
+    style = meta.get("style")
+    if style and not os.path.exists(os.path.join(STYLES, style + ".json")):
+        have = sorted(f[:-5] for f in os.listdir(STYLES) if f.endswith(".json"))
+        ctx.fail("meta.style", "没有这个皮肤：%r（styles/ 下只有 %s）" % (style, " / ".join(have)))
+
+    for k in (CONTENT.get("theme") or {}):
+        if k not in ctx.theme_keys:
+            ctx.fail("theme.%s" % k, "不是可覆写的色键（可用：%s）"
+                     % " / ".join(sorted(ctx.theme_keys)))
+
+    # 皮肤文件里的色键：写错会被引擎的 `if (k in C)` 静默丢掉
+    for fn in sorted(os.listdir(STYLES)):
+        if not fn.endswith(".json"):
+            continue
+        st = json.load(open(os.path.join(STYLES, fn), encoding="utf-8"))
+        for k in list(st.get("theme") or {}) + list(st.get("tokens") or {}):
+            if k not in ctx.theme_keys:
+                ctx.fail("styles/%s" % fn, "不认识的色键 %r（会被引擎静默忽略）" % k)
+
+    _check(ctx, SCHEMA["assets"], CONTENT.get("assets"), "assets")
+
+    scenes = CONTENT.get("scenes")
+    if not isinstance(scenes, list) or not scenes:
+        raise SystemExit("content 的 scenes 要是非空数组")
+    common = SCHEMA["scenes"]["common"]
+    all_tpl_fields = {}
+    for sp in SCHEMA["scenes"]["tpl"].values():
+        all_tpl_fields.update(sp["fields"])
+
+    seen = set()
+    for idx, sc in enumerate(scenes):
+        p = "scenes[%d]" % idx
+        if not isinstance(sc, dict):
+            ctx.fail(p, "应为对象，当前是 %s" % _ty(sc))
+            continue
+        sid = sc.get("id")
+        if isinstance(sid, str):
+            if sid in seen:
+                ctx.fail("%s.id" % p, "镜号重复：%r" % sid)
+            seen.add(sid)
+        spec = SCHEMA["scenes"]["tpl"].get(sc.get("tpl"))
+        # tpl 不认识时不该连带报一堆"不认识的字段"，只报 tpl 那一条
+        fields = dict(common)
+        fields.update(spec["fields"] if spec else all_tpl_fields)
+        _check_fields(ctx, fields, sc, p)
+
+    base = meta.get("assetBase") or SCHEMA["meta"]["assetBase"]["default"]
+    adir = os.path.normpath(os.path.join(ENGINE, base))
+    for a in CONTENT.get("assets") or []:
+        if isinstance(a, dict) and a.get("file") \
+                and not os.path.exists(os.path.join(adir, a["file"])):
+            ctx.fail("assets[%s]" % a.get("name"), "文件不存在：%s" % os.path.join(adir, a["file"]))
+
+    if ctx.errs:
+        raise SystemExit("content 校验失败（%s）：\n  %s\n\n配置面见 content/schema.json"
+                         % (os.path.relpath(CONTENT_PATH, WORK), "\n  ".join(ctx.errs)))
+    print("校验通过：%d 镜，%d 个插画" % (len(scenes), len(ctx.assets)))
+
+
+def _meta_spec(key):
+    return SCHEMA["meta"][key]["default"]
+
+
+def _fps():
+    spec = SCHEMA["meta"]["fps"]
+    v = CONTENT["meta"].get("fps", spec["default"])
+    # 类型/范围上面校验过了，这里只为把"为什么是 24 下限"讲清楚
+    if not isinstance(v, int) or isinstance(v, bool) or not (spec["min"] <= v <= spec["max"]):
+        raise SystemExit("meta.fps 应为 %d–%d 的整数，当前是 %r。" % (spec["min"], spec["max"], v))
+    return v
+
+
+def _pace():
+    p = {k: v["default"] for k, v in SCHEMA["meta"]["pace"]["fields"].items()}
+    p.update(CONTENT["meta"].get("pace") or {})
+    return p
+
+
+# ============================ 音频 =========================================
 def ffmpeg():
     import imageio_ffmpeg
     return imageio_ffmpeg.get_ffmpeg_exe()
@@ -83,8 +321,13 @@ def synth(text, path):
     asyncio.run(run())
 
 
+# ============================ 主流程 =======================================
 def main():
-    _check_beats()          # 先挡内容错误，再花时间跑 TTS
+    validate()                      # 先挡内容错误，再花时间跑 TTS
+    FPS = _fps()
+    pace = _pace()
+    lead, tail, last_tail = pace["lead"], pace["tail"], pace["lastTail"]
+
     cache_path = os.path.join(TTS_DIR, "_hash.json")
     cache = json.load(open(cache_path, encoding="utf-8")) if os.path.exists(cache_path) else {}
     segs, reused, made = [], 0, 0
@@ -108,16 +351,19 @@ def main():
 
     items, t = [], 0.0
     for i, s in enumerate(segs):
-        tail = LAST_TAIL if i == len(segs) - 1 else TAIL
-        dur = LEAD + s["dur"] + tail
+        tail_i = last_tail if i == len(segs) - 1 else tail
+        dur = lead + s["dur"] + tail_i
         items.append({"id": s["id"], "text": s["text"], "start": round(t, 3),
-                      "dur": round(dur, 3), "speechStart": round(t + LEAD, 3),
+                      "dur": round(dur, 3), "speechStart": round(t + lead, 3),
                       "speechDur": round(s["dur"], 3)})
         t += dur
     frames = round(t * FPS); total = frames / FPS
 
+    # 节奏用 window.PACE 挂出去（不是 const，免得和 engine.js 的声明撞车）
     js = ["// generated by scripts/build_content.py  (edit engine/content.json instead)",
-          "const FPS = %d;" % FPS, "const TOTAL = %r;" % total, "const TIMELINE = [",
+          "const FPS = %d;" % FPS, "const TOTAL = %r;" % total,
+          "window.PACE = %s;" % json.dumps(pace, separators=(", ", ": ")),
+          "const TIMELINE = [",
           ",\n".join("  " + json.dumps(x, ensure_ascii=False) for x in items), "];", ""]
     open(os.path.join(WORK, "src", "timeline.js"), "w", encoding="utf-8").write("\n".join(js))
     json.dump({"fps": FPS, "frames": frames, "total": round(total, 4), "scenes": items},
@@ -126,7 +372,7 @@ def main():
 
     merged = dict(CONTENT)
     sname = CONTENT.get("style") or CONTENT.get("meta", {}).get("style", "warm")
-    spath = os.path.join(WORK, "styles", sname + ".json")
+    spath = os.path.join(STYLES, sname + ".json")
     if not os.path.exists(spath):
         raise SystemExit("style not found: " + spath)
     st = json.load(open(spath, encoding="utf-8"))
@@ -139,7 +385,8 @@ def main():
     open(os.path.join(ENGINE, "content.js"), "w", encoding="utf-8").write(
         "// generated by scripts/build_content.py  (edit content.json instead)\n"
         "window.CONTENT = " + json.dumps(merged, ensure_ascii=False, indent=2) + ";\n")
-    print("total %.3fs -> %d frames" % (total, frames))
+    print("total %.3fs -> %d frames @ %dfps  (lead %.2f / tail %.2f / 末镜 %.2f / 转场 %.2f)"
+          % (total, frames, FPS, lead, tail, last_tail, pace["transition"]))
     print("wrote engine/content.js + timeline.json + src/timeline.js")
 
 

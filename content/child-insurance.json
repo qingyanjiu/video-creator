@@ -8,10 +8,6 @@
     "voice": "zh-CN-XiaoxiaoNeural",
     "rate": "+8%",
     "fps": 30,
-    "size": [
-      1080,
-      1920
-    ],
     "assetBase": "../src/assets/"
   },
   "assets": [

@@ -33,5 +33,25 @@
     "accent": "#FF8A3D",
     "recoloured": 3,
     "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "coding": {
+    "accent": "#FF6B7A",
+    "recoloured": 13,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "server": {
+    "accent": "#38E0B0",
+    "recoloured": 25,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "matrix": {
+    "accent": "#A98CFF",
+    "recoloured": 181,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
+  },
+  "devices": {
+    "accent": "#4DA6FF",
+    "recoloured": 10,
+    "source": "unDraw (mkhairi/undraw mirror), MIT licence"
   }
 }

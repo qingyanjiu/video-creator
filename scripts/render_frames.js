@@ -3,7 +3,7 @@ const fs = require('fs');
 const { chromium } = require('playwright');
 
 const WORK = path.resolve(__dirname, '..');
-const REL = process.env.RENDER_HTML || 'src/render.html';
+const REL = process.env.RENDER_HTML || 'engine/render.html';
 const URL = 'file:///' + path.join(WORK, REL).replace(/\\/g, '/');
 
 (async () => {
@@ -35,6 +35,10 @@ const URL = 'file:///' + path.join(WORK, REL).replace(/\\/g, '/');
     const png = mode === 'png';
     const dir = path.join(WORK, process.env.FRAMES_DIR || 'out/frames');
     fs.mkdirSync(dir, { recursive: true });
+    // 先清掉上一次的帧：片子变短时旧帧会留在目录里，encode.py 会连它们一起编进去。
+    for (const f of fs.readdirSync(dir)) {
+      if (/^f\d+\.(png|jpg)$/.test(f)) fs.unlinkSync(path.join(dir, f));
+    }
     const n = meta.frames;
     const t0 = Date.now();
     for (let f = 0; f < n; f++) {
