@@ -4,7 +4,7 @@ import numpy as np
 import imageio_ffmpeg
 WORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FF = imageio_ffmpeg.get_ffmpeg_exe()
-MP4 = os.path.abspath(os.path.join(WORK, "..", "outputs", "给孩子买保险-科普短片.mp4"))
+MP4 = os.path.abspath(os.path.join(WORK, "out", "给孩子买保险-科普短片.mp4"))
 meta = json.load(open(os.path.join(WORK, "timeline.json"), encoding="utf-8"))
 raw = subprocess.run([FF,"-v","error","-i",MP4,"-f","f32le","-ac","1","-ar","8000","-"],capture_output=True).stdout
 a = np.frombuffer(raw, dtype="<f4").astype(np.float64); sr=8000; win=int(0.05*sr); n=len(a)//win

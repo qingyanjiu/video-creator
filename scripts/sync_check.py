@@ -1,5 +1,5 @@
 ﻿# -*- coding: utf-8 -*-
-import json, os, subprocess, sys
+import glob, json, os, subprocess, sys
 import numpy as np, imageio_ffmpeg
 WORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FF = imageio_ffmpeg.get_ffmpeg_exe()
@@ -13,6 +13,8 @@ def find_mp4():
         cands.append(os.path.join(WORK, os.environ.get("OUT_DIR") or "out", os.environ["OUT_NAME"] + ".mp4"))
     cands += [
         os.path.join(WORK, "out", "给孩子买保险-科普短片.mp4"),
+        # 随便哪个名字都行：直接拿 out/ 里最新的那个 mp4
+        *sorted(glob.glob(os.path.join(WORK, "out", "*.mp4")), key=os.path.getmtime, reverse=True),
         os.path.join(WORK, "..", "outputs", "给孩子买保险-科普短片.mp4"),
     ]
     for c in cands:

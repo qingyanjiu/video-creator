@@ -16,7 +16,30 @@ TTS_DIR = os.path.join(WORK, "tts")
 os.makedirs(TTS_DIR, exist_ok=True)
 
 LEAD, TAIL, LAST_TAIL = 0.30, 0.36, 1.20
-FPS = int(CONTENT["meta"].get("fps", 30))
+FPS = CONTENT["meta"].get("fps", 30)
+if not isinstance(FPS, int) or isinstance(FPS, bool) or not 10 <= FPS <= 120:
+    raise SystemExit("meta.fps 应为 10–120 的整数，当前是 %r。\n"
+                     "  这个内容里最快的动效是抖动（约 4.8Hz），低于 20fps 会明显抖；"
+                     "30 是默认值。" % (FPS,))
+
+
+def _check_beats():
+    """chips / tags / items 的时间项是"解说进行到几成"(0-1)，不是秒。
+
+    写错不会报错，只会让元素在该出现的时候不出现（秒数被 clamp 成 1.0 或 0），
+    很难看画面看出来——所以在这里挡住。"""
+    fields = [("chips", 1), ("tags", 1), ("items", 1)]
+    bad = []
+    for sc in CONTENT["scenes"]:
+        for name, idx in fields:
+            for row in sc.get(name) or []:
+                v = row[idx]
+                ok = isinstance(v, (int, float)) and not isinstance(v, bool) and 0.0 <= v <= 1.0
+                if not ok:
+                    bad.append("%s.%s %r 的解说进度=%r（应为 0-1 的比例，不是秒）"
+                               % (sc["id"], name, row[0], v))
+    if bad:
+        raise SystemExit("content 校验失败：\n  " + "\n  ".join(bad))
 
 
 def ffmpeg():
@@ -61,6 +84,7 @@ def synth(text, path):
 
 
 def main():
+    _check_beats()          # 先挡内容错误，再花时间跑 TTS
     cache_path = os.path.join(TTS_DIR, "_hash.json")
     cache = json.load(open(cache_path, encoding="utf-8")) if os.path.exists(cache_path) else {}
     segs, reused, made = [], 0, 0

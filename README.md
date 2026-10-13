@@ -92,6 +92,19 @@ python scripts\encode.py
 
 同一份文案切 `style` 即可产出两种视觉，排版/动效/时长完全一致。
 
+## 换帧率
+
+`content/*.json` 里的 `meta.fps`，默认 30：
+
+```json
+{ "meta": { "fps": 24 } }
+```
+
+改完要重跑 `build_content.py`（它按这个值算总帧数）再渲染。30 → 24 省 20% 渲染时间和体积，
+但 **24 是下限**——再低，卡片落位的抖动（约 4.8Hz）会明显发抖。详见 [docs/02](docs/02-版式与风格.md)。
+
+> 注意：降帧率省的是渲染时间和磁盘，**不是 token**。渲染/编码是本地 Playwright + ffmpeg，不经过模型。
+
 ## 换选题
 
 复制一份 `content/child-insurance.json`，改 `narration` 文案和各版式的字段即可。
@@ -105,6 +118,7 @@ python scripts\encode.py
 | `scripts/layout_probe.js` | 逐帧测量文本 bbox 与插画矩形，检出重叠/越界 |
 | `scripts/check_contrast.py` | 按皮肤算 WCAG 对比度，抓"看不清"的配色 |
 | `scripts/diff_frames.js` | 两版帧逐像素回归比对 |
+| `scripts/motion_check.js` | 每镜尾部窗口的"画面动能量"，抓元素落位后冻住的静帧 |
 | `scripts/ocr_all.js` | 成片文字 OCR 校验 |
 
 ## 许可

@@ -14,7 +14,7 @@ if not os.path.exists(AUDIO):
              "  python scripts/mix_audio.py    # 配音+BGM 混音 -> audio.m4a\n"
              "或直接运行 .\\run.ps1（会自动补做）")
 
-outdir = os.environ.get("OUT_DIR") or os.path.join(WORK, "..", "outputs")
+outdir = os.environ.get("OUT_DIR") or os.path.join(WORK, "out")
 if not os.path.isabs(outdir):
     outdir = os.path.join(WORK, outdir)
 os.makedirs(outdir, exist_ok=True)
@@ -38,18 +38,23 @@ print("frames: %d 张  (%s)" % (n_have, fdir))
 if n_have != meta["frames"]:
     print("警告：帧数 %d != 时间轴预期 %d，成片可能不完整" % (n_have, meta["frames"]))
 
+# 帧率一律从 timeline.json 取——它由 content.json 的 meta.fps 生成，
+# 渲染脚本也是按同一个值算帧数的。这里若写死，帧数和播放速率就会对不上。
+fps = int(meta.get("fps", 30))
+
 cmd = [
     FF, "-y", "-v", "warning", "-stats",
-    "-framerate", "30", "-start_number", "0",
+    "-framerate", str(fps), "-start_number", "0",
     "-i", os.path.join(fdir, "f%05d." + ext),
     "-i", AUDIO,
     "-c:v", "libx264", "-preset", "slow", "-crf", "18",
     "-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.2",
-    "-x264-params", "keyint=60:min-keyint=30",
+    # 关键帧间隔按 2s / 1s 折算，别写成固定帧数
+    "-x264-params", "keyint=%d:min-keyint=%d" % (fps * 2, fps),
     "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
     "-af", "aresample=async=1:first_pts=0",
     "-shortest", "-movflags", "+faststart",
-    "-r", "30", out,
+    "-r", str(fps), out,
 ]
 print("encoding ->", out)
 r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -62,4 +67,4 @@ for l in probe.splitlines():
     if "Duration" in l or "Stream #" in l or "encoder" in l:
         print(l.strip())
 print("size: %.2f MB" % (os.path.getsize(out) / 1048576))
-print("expected duration %.2fs" % meta["total"])
+print("expected duration %.2fs @ %dfps" % (meta["total"], fps))

@@ -42,6 +42,53 @@ const easeInOutCubic = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3)
 const easeOutBack = p => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
 const seg = (t, a, b) => clamp01((t - a) / (b - a));
 
+/* ---------- 节拍：动画挂在配音上，而不是挂在写死的秒数上 ----------
+   场景时长 dur = LEAD + 本镜配音实测时长 + TAIL，是内容驱动的变量；
+   所以关键帧一律用"解说进行到几成"来表达，由 beats()/bs() 换算成秒。 */
+function beats(i) {
+  const sc = TIMELINE[i] || {};
+  const lead = Math.max(0, (sc.speechStart || 0) - (sc.start || 0));   // 解说前的留白，通常 0.30
+  const sd = sc.speechDur || Math.max(1, (sc.dur || 3) - 0.66);        // 本镜配音实测时长
+  const dur = sc.dur || (lead + sd + 0.36);
+  return { lead: lead, sd: sd, dur: dur };
+}
+/* 解说进行到 f(0..1) 处的场景内秒数。
+   传 len（入场动画时长）时会封顶到"场景结束前 len+0.06 秒"，
+   保证动画播得完——TAIL 只有 0.36s，钉在 f=1 的动画否则会被切在半途。 */
+function bs(i, f, len) {
+  const b = beats(i);
+  const a = b.lead + b.sd * clamp01(f);
+  return len ? Math.min(a, b.dur - len - 0.06) : a;
+}
+/* 出场进度：第 i 镜解说进行到 f 处开始、历时 len 秒 */
+function bseg(t, i, f, len) { const a = bs(i, f, len); return seg(t, a, a + len); }
+/* lead-in 进度：在解说开始之前就落位（徽标、大标题） */
+function lseg(t, i, len) { const b = beats(i); return seg(t, Math.max(0, b.lead - len), b.lead + 0.06); }
+
+/* ---------- 存活期微动 ----------
+   T / SI 是"当前正在绘制的场景局部时间 / 镜号"，由 drawSceneInto / renderFrame
+   在调用场景函数前写入，供 drawAsset() 这类道具层读取。
+   相位一律由镜号派生，不用全局自增计数器——转场一帧内场景函数会被调用两次，
+   计数器会错位。 */
+let T = 0, SI = 0;
+
+/* 场景级摄影机漂移。幅度被安全区余量锁死：
+   最贴边的 stepBadge 顶边 y=250，全幅漂移下到 241，距安全区上界 230 还有 11px。
+   调大这里之前先重算那个余量。 */
+function sceneCam(ctx, i, t) {
+  const ph = i * 1.9;
+  ctx.translate(Math.sin(t * 0.21 + ph) * 5, Math.cos(t * 0.17 + ph) * 6);
+  const s = 1 + Math.sin(t * 0.13 + ph) * 0.004;
+  ctx.translate(540, 960); ctx.scale(s, s); ctx.translate(-540, -960);
+}
+
+/* 落位呼吸：入场动画播完之后叠加一个极缓缩放（幅度 a，默认 1.2%），
+   让"已落位"的元素继续呼吸，而不是冻住。 */
+function settle(t, i, f, len, a) {
+  const w = t - (bs(i, f, len) + len);
+  return w <= 0 ? 1 : 1 + Math.sin(w * 1.15 + i * 2.1) * (a === undefined ? 0.012 : a);
+}
+
 function rr(ctx, x, y, w, h, r) {
   r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
   ctx.beginPath();
@@ -117,7 +164,8 @@ function drawAsset(ctx, name, cx, cy, w, o) {
   if (o.pop && o.pop !== 1) {
     ctx.translate(cx, cy); ctx.scale(o.pop, o.pop); ctx.translate(-cx, -cy);
   }
-  ctx.drawImage(im, cx - w / 2, cy - h / 2 + (o.rise || 0), w, h);
+  const fl = Math.sin(T * 1.745 + SI * 1.3) * 4;   // ±4px 的缓慢浮动，远小于安全区余量
+  ctx.drawImage(im, cx - w / 2, cy - h / 2 + (o.rise || 0) + fl, w, h);
   ctx.restore();
   return h;
 }
@@ -162,7 +210,8 @@ function activeSub(i, t) {
 function bgBase(ctx, t, tint) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, C.bg); g.addColorStop(1, C.bg2);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  /* overscan 24px：摄影机漂移会把全屏底色推出画面，不留够就会露出 render.html 的 #111 */
+  ctx.fillStyle = g; ctx.fillRect(-24, -24, W + 48, H + 48);
   const dx = Math.sin(t * 0.35) * 30, dy = Math.cos(t * 0.28) * 34;
   softCircle(ctx, 180 + dx, 380 + dy, 430, tint || C.orange, 0.13 * C.glow);
   softCircle(ctx, 930 - dx, 1180 - dy, 470, C.mint, 0.10 * C.glow);
@@ -184,25 +233,28 @@ function stepBadge(ctx, n, label, color, p) {
 }
 
 /* =========================== 场景 1 · 钩子 =========================== */
-function scene1(ctx, t, dur) {
+function scene1(ctx, t, dur, i) {
   const c = SCN(0);
   bgBase(ctx, t, CL(c.accent));
-  const p = easeOutCubic(seg(t, 0.05, 0.85));
+  const p = easeOutCubic(lseg(t, i, 0.50));
   txt(ctx, c.title, W / 2, lerp(430, 388, p), 78, C.ink, 800);
-  ctx.save(); ctx.globalAlpha = seg(t, 0.45, 1.1);
+  ctx.save(); ctx.globalAlpha = bseg(t, i, 0.08, 0.45);
   txt(ctx, c.sub, W / 2, 500, 60, CL(c.accent), 800); ctx.restore();
 
-  const ap = easeOutCubic(seg(t, 0.25, 1.15));
+  const ap = easeOutCubic(bseg(t, i, 0.05, 0.60));
   if (ap > 0) drawAsset(ctx, c.asset, 540, 968, 880, { alpha: ap, rise: (1 - ap) * 46 });
 
   ctx.save();
-  c.popups.forEach((c, i) => {
-    const label = c[0], col = CL(c[1]), x0 = c[2], spd = c[3];
-    const y = ((t * 300 * spd + i * 220) % (H + 520)) - 260;
-    const x = clamp(x0 + Math.sin(t * 1.6 + i) * 22, 100, W - 100);
+  c.popups.forEach((pu, k) => {
+    const label = pu[0], col = CL(pu[1]), x0 = pu[2], spd = pu[3];
+    const y = ((t * 300 * spd + k * 220) % (H + 520)) - 260;
+    const x = clamp(x0 + Math.sin(t * 1.6 + k) * 22, 100, W - 100);
     const wChip = width(ctx, label, 36, 700) + 62;
-    ctx.save(); ctx.globalAlpha = 0.92 * clamp01(t / 0.4);
-    ctx.translate(x, y); ctx.rotate(Math.sin(t * 1.1 + i * 2) * 0.09);
+    /* 字幕气泡大致占 y∈[1355,1545]：进入该带淡出、离开再淡入，
+       视觉上读作"从字幕后面穿过"，而不是被气泡切掉一半 */
+    const inBand = clamp01((y - 1330) / 110) * (1 - clamp01((y - 1580) / 110));
+    ctx.save(); ctx.globalAlpha = 0.92 * clamp01(t / 0.4) * (1 - inBand);
+    ctx.translate(x, y); ctx.rotate(Math.sin(t * 1.1 + k * 2) * 0.09);
     shadow(ctx, 22, 9); box(ctx, -wChip / 2, -38, wChip, 76, 38, C.card); noShadow(ctx);
     ctx.strokeStyle = col; ctx.lineWidth = 3;
     rr(ctx, -wChip / 2, -38, wChip, 76, 38); ctx.stroke();
@@ -213,18 +265,20 @@ function scene1(ctx, t, dur) {
 }
 
 /* =========================== 场景 2 · 少儿医保 =========================== */
-function scene2(ctx, t, dur) {
+function scene2(ctx, t, dur, i) {
   const c = SCN(1);
   bgBase(ctx, t, CL(c.accent));
-  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), seg(t, 0.05, 0.5));
+  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
-  const hp = easeOutCubic(seg(t, 0.3, 1.0));
+  const hp = easeOutCubic(bseg(t, i, 0.00, 0.70));
   if (hp > 0) drawAsset(ctx, c.asset, 540, 560, 390, { alpha: hp, rise: (1 - hp) * 30 });
 
-  const cp = easeOutCubic(seg(t, 0.6, 1.35));
+  const cp = easeOutCubic(bseg(t, i, 0.16, 0.75));
   if (cp > 0) {
     const cy = lerp(1290, 940, cp), cw = 760, ch = 430;
+    const br = settle(t, i, 0.16, 0.75);          // 卡片落位后的呼吸
     ctx.save(); ctx.globalAlpha = cp;
+    ctx.translate(540, cy); ctx.scale(br, br); ctx.translate(-540, -cy);
     shadow(ctx, 56, 26); box(ctx, 540 - cw / 2, cy - ch / 2, cw, ch, 44, C.card); noShadow(ctx);
     ctx.save(); rr(ctx, 540 - cw / 2, cy - ch / 2, cw, ch, 44); ctx.clip();
     const hg = ctx.createLinearGradient(0, cy - ch / 2, 0, cy - ch / 2 + 132);
@@ -236,7 +290,7 @@ function scene2(ctx, t, dur) {
     txt(ctx, c.card.title, 540 - cw / 2 + 52, cy - ch / 2 + 66, 44, C.onAccent, 800, 'left');
     txt(ctx, c.card.sub, 540 - cw / 2 + 52, cy - ch / 2 + 152, 28, C.ink2, 600, 'left');
 
-    const numP = easeOutBack(clamp01((t - 1.35) / 0.6));
+    const numP = easeOutBack(bseg(t, i, 0.36, 0.60));
     ctx.save(); ctx.globalAlpha = clamp01(numP);
     const sc = 0.7 + 0.3 * numP;
     ctx.translate(540 - cw / 2 + 52, cy + 34); ctx.scale(sc, sc);
@@ -245,7 +299,7 @@ function scene2(ctx, t, dur) {
     ctx.restore();
     txt(ctx, c.card.note, 540 - cw / 2 + 52, cy + 128, 34, C.ink2, 600, 'left');
 
-    const ck = seg(t, 1.9, 2.5);
+    const ck = bseg(t, i, 0.58, 0.55);
     if (ck > 0) {
       ctx.save(); ctx.globalAlpha = clamp01(ck * 1.4);
       ctx.beginPath(); ctx.arc(540 + cw / 2 - 120, cy + 44, 66, 0, Math.PI * 2 * clamp01(ck * 1.6));
@@ -256,7 +310,7 @@ function scene2(ctx, t, dur) {
     ctx.restore();
   }
 
-  const bp = easeOutCubic(seg(t, 2.4, 3.0));
+  const bp = easeOutCubic(bseg(t, i, 0.76, 0.60));
   if (bp > 0) {
     const label = c.ribbon;
     const bwid = width(ctx, label, 38, 700) + 80;
@@ -268,18 +322,19 @@ function scene2(ctx, t, dur) {
 }
 
 /* =========================== 场景 3 · 意外险 =========================== */
-function scene3(ctx, t, dur) {
+function scene3(ctx, t, dur, i) {
   const c = SCN(2);
   bgBase(ctx, t, CL(c.accent));
-  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), seg(t, 0.05, 0.5));
+  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
-  const ap = easeOutBack(seg(t, 0.35, 1.15));
+  const ap = easeOutBack(bseg(t, i, 0.00, 0.70));
   if (ap > 0) drawAsset(ctx, c.asset, 540, 812, 580, { alpha: clamp01(ap), pop: clamp(ap, 0.35, 1.12) });
 
   const chips = c.chips;
   chips.forEach(ch => {
-    const label = ch[0], t0 = ch[1], x = ch[2], y = ch[3];
-    const q = easeOutBack(seg(t, t0, t0 + 0.55)); if (q <= 0) return;
+    // ch[1] 是"解说进行到几成"（0..1），不再是秒
+    const label = ch[0], at = ch[1], x = ch[2], y = ch[3];
+    const q = easeOutBack(bseg(t, i, at, 0.55)); if (q <= 0) return;
     const wid = width(ctx, label, 40, 700) + 76;
     ctx.save(); ctx.globalAlpha = clamp01(q);
     ctx.translate(x, y); ctx.scale(clamp(q, 0.4, 1.2), clamp(q, 0.4, 1.2)); ctx.translate(-x, -y);
@@ -290,33 +345,33 @@ function scene3(ctx, t, dur) {
 }
 
 /* =========================== 场景 4 · 医疗险 =========================== */
-function scene4(ctx, t, dur) {
+function scene4(ctx, t, dur, i) {
   const c = SCN(3);
   bgBase(ctx, t, CL(c.accent));
-  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), seg(t, 0.05, 0.5));
+  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
-  const hp = easeOutCubic(seg(t, 0.3, 1.0));
+  const hp = easeOutCubic(bseg(t, i, 0.00, 0.70));
   if (hp > 0) drawAsset(ctx, c.asset, 540, 618, 470, { alpha: hp, rise: (1 - hp) * 28 });
 
-  const bp = easeOutCubic(seg(t, 0.6, 1.2));
+  const bp = easeOutCubic(bseg(t, i, 0.10, 0.60));
   const bx0 = 140, by0 = lerp(1150, 820, bp), bwAll = 800, bhAll = 150;
   if (bp > 0) {
     ctx.save(); ctx.globalAlpha = bp;
     shadow(ctx, 30, 12); box(ctx, bx0, by0, bwAll, bhAll, 40, C.card); noShadow(ctx);
     ctx.save(); rr(ctx, bx0, by0, bwAll, bhAll, 40); ctx.clip();
-    const cut = easeInOutCubic(seg(t, 1.3, 2.1));
+    const cut = easeInOutCubic(bseg(t, i, 0.30, 0.80));
     const split = 0.45;
     ctx.fillStyle = C.splitLeft; ctx.fillRect(bx0, by0, bwAll * split * cut, bhAll);
     ctx.fillStyle = C.splitRight; ctx.fillRect(bx0 + bwAll * split, by0, bwAll * (1 - split) * cut, bhAll);
     ctx.restore();
-    ctx.save(); ctx.globalAlpha = clamp01(seg(t, 1.5, 2.2));
+    ctx.save(); ctx.globalAlpha = bseg(t, i, 0.34, 0.70);
     txt(ctx, c.bar[0], bx0 + bwAll * split / 2, by0 + bhAll / 2 + 2, 40, C.onAccent, 800);
     txt(ctx, c.bar[1], bx0 + bwAll * split + bwAll * (1 - split) / 2, by0 + bhAll / 2 + 2, 40, C.onAccent, 800);
     ctx.restore();
     ctx.restore();
   }
 
-  const np = easeOutBack(seg(t, 2.2, 2.9));
+  const np = easeOutBack(bseg(t, i, 0.54, 0.70));
   if (np > 0) {
     const nx = 500, ny = 1010, nw = 440, nh = 240;
     ctx.save(); ctx.globalAlpha = clamp01(np);
@@ -330,11 +385,11 @@ function scene4(ctx, t, dur) {
     ctx.restore();
   }
 
-  const q = seg(t, 3.0, 4.4);
+  const q = bseg(t, i, 0.72, 1.10);
   if (q > 0) {
     ctx.save();
-    for (let i = 0; i < 4; i++) {
-      const pp = clamp01(q * 1.35 - i * 0.16); if (pp <= 0) continue;
+    for (let k = 0; k < 4; k++) {
+      const pp = clamp01(q * 1.35 - k * 0.16); if (pp <= 0) continue;
       const e = easeInOutCubic(pp);
       const x = lerp(560, 400, e), y = lerp(1120, 1146, e) - Math.sin(pp * Math.PI) * 84;
       ctx.globalAlpha = clamp01(pp * 3);
@@ -343,7 +398,7 @@ function scene4(ctx, t, dur) {
       txt(ctx, '¥', x, y + 2, 28, C.coinInk, 800);
     }
     ctx.restore();
-    const wp = easeOutCubic(seg(t, 3.2, 3.8));
+    const wp = easeOutCubic(bseg(t, i, 0.78, 0.60));
     ctx.save(); ctx.globalAlpha = wp;
     const wx = 250, wy = 1130;
     shadow(ctx, 26, 10); box(ctx, wx - 110, wy - 70, 220, 140, 30, C.orange); noShadow(ctx);
@@ -354,17 +409,18 @@ function scene4(ctx, t, dur) {
 }
 
 /* =========================== 场景 5 · 重疾险 =========================== */
-function scene5(ctx, t, dur) {
+function scene5(ctx, t, dur, i) {
   const c = SCN(4);
   bgBase(ctx, t, CL(c.accent));
-  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), seg(t, 0.05, 0.5));
+  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
-  const vp = seg(t, 0.6, 1.2);
+  const vp = bseg(t, i, 0.02, 0.55);
   if (vp > 0) {
     const e = easeOutCubic(vp);
-    const val = Math.round(easeOutCubic(clamp01((t - 0.6) / 1.8)) * c.value.number);
+    const val = Math.round(easeOutCubic(bseg(t, i, 0.04, 2.40)) * c.value.number);
+    const br = settle(t, i, 0.02, 0.55);          // 保额卡片落位后的呼吸
     ctx.save(); ctx.globalAlpha = e;
-    ctx.translate(540, 545); ctx.scale(0.9 + 0.1 * e, 0.9 + 0.1 * e);
+    ctx.translate(540, 545); ctx.scale((0.9 + 0.1 * e) * br, (0.9 + 0.1 * e) * br);
     shadow(ctx, 40, 18); box(ctx, -280, -105, 560, 210, 44, C.card); noShadow(ctx);
     txt(ctx, c.value.label, 0, -50, 34, C.ink2, 700);
     txt(ctx, val + ' ' + c.value.unit, 0, 20, 90, CL(c.value.color), 800);
@@ -372,14 +428,15 @@ function scene5(ctx, t, dur) {
     ctx.restore(); ctx.restore();
   }
 
-  const ap = easeOutCubic(seg(t, 1.1, 2.0));
+  const ap = easeOutCubic(bseg(t, i, 0.10, 0.90));
   if (ap > 0) drawAsset(ctx, c.asset, 700, 950, 520, { alpha: ap, rise: (1 - ap) * 36 });
 
   const tags = c.tags;
   ctx.save();
   tags.forEach(tg => {
-    const label = tg[0], t0 = tg[1], y = tg[2];
-    const p = seg(t, t0, t0 + 1.0); if (p <= 0) return;
+    // tg[1] 是"解说进行到几成"（0..1），不再是秒
+    const label = tg[0], at = tg[1], y = tg[2];
+    const p = bseg(t, i, at, 0.90); if (p <= 0) return;
     const e = easeOutCubic(p);
     const x = lerp(110, 250, e);
     const wid = width(ctx, label, 32, 700) + 62;
@@ -390,7 +447,7 @@ function scene5(ctx, t, dur) {
   });
   ctx.restore();
 
-  const xp = seg(t, 7.4, 8.0);
+  const xp = bseg(t, i, 0.85, 0.60);
   if (xp > 0) {
     const shake = Math.sin(t * 30) * (1 - clamp01(xp)) * 10;
     ctx.save(); ctx.globalAlpha = clamp01(xp);
@@ -405,16 +462,17 @@ function scene5(ctx, t, dur) {
 }
 
 /* =========================== 场景 6 · 三个坑 =========================== */
-function scene6(ctx, t, dur) {
+function scene6(ctx, t, dur, i) {
   const c = SCN(5);
   bgBase(ctx, t, CL(c.accent));
   txt(ctx, c.title, W / 2, 420, 72, C.ink, 800);
   const cards = c.items;
-  cards.forEach((cd, i) => {
-    const label = cd[0], t0 = cd[1];
-    const p = seg(t, t0, t0 + 0.6); if (p <= 0) return;
+  cards.forEach((cd, k) => {
+    // cd[1] 是"解说进行到几成"（0..1），不再是秒
+    const label = cd[0], at = cd[1];
+    const p = bseg(t, i, at, 0.60); if (p <= 0) return;
     const e = easeOutBack(p);
-    const y = 640 + i * 280, w = 850, h = 236;
+    const y = 640 + k * 280, w = 850, h = 236;
     const shake = Math.sin(t * 26) * (1 - clamp01(p)) * 14;
     ctx.save();
     ctx.globalAlpha = clamp01(p * 1.6);
@@ -429,18 +487,18 @@ function scene6(ctx, t, dur) {
 }
 
 /* =========================== 场景 7 · 教育金 =========================== */
-function scene7(ctx, t, dur) {
+function scene7(ctx, t, dur, i) {
   const c = SCN(6);
   bgBase(ctx, t, CL(c.accent));
-  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), seg(t, 0.05, 0.5));
+  stepBadge(ctx, c.badge.n, c.badge.label, CL(c.badge.color), lseg(t, i, 0.45));
 
-  const p = easeOutCubic(seg(t, 0.3, 1.1));
+  const p = easeOutCubic(bseg(t, i, 0.00, 0.70));
   if (p > 0) drawAsset(ctx, c.asset, 540, 950, 620, { alpha: p, rise: (1 - p) * 50 });
 
-  for (let i = 0; i < 3; i++) {
-    const q = clamp01((t - 1.0 - i * 0.55) / 0.7); if (q <= 0) continue;
+  for (let k = 0; k < 3; k++) {
+    const q = bseg(t, i, 0.20 + k * 0.12, 0.55); if (q <= 0) continue;
     const y = lerp(600, 792, easeInOutCubic(q));
-    const cx2 = 540 + Math.sin(q * 6 + i) * 10;
+    const cx2 = 540 + Math.sin(q * 6 + k) * 10;
     ctx.save(); ctx.globalAlpha = clamp01(q * 4);
     ctx.beginPath(); ctx.arc(cx2, y, 30, 0, 7); ctx.fillStyle = C.coin; ctx.fill();
     ctx.strokeStyle = C.coinEdge; ctx.lineWidth = 5; ctx.stroke();
@@ -448,7 +506,7 @@ function scene7(ctx, t, dur) {
     ctx.restore();
   }
 
-  const tp = easeOutCubic(seg(t, 3.4, 4.0));
+  const tp = easeOutCubic(bseg(t, i, 0.80, 0.60));
   if (tp > 0) {
     const label = c.note;
     const wid = width(ctx, label, 34, 700) + 70;
@@ -460,7 +518,7 @@ function scene7(ctx, t, dur) {
 }
 
 /* =========================== 场景 8 · 总结 =========================== */
-function scene8(ctx, t, dur) {
+function scene8(ctx, t, dur, i) {
   const c = SCN(7);
   bgBase(ctx, t, CL(c.accent));
   txt(ctx, c.title, W / 2, 400, 72, C.ink, 800);
@@ -469,36 +527,36 @@ function scene8(ctx, t, dur) {
   const steps = c.steps.map(s => [s[0], CL(s[1]), s[2]]);
   const bw = 132, gap = 58, totalW = steps.length * bw + (steps.length - 1) * gap;
   const x0 = (W - totalW) / 2, baseY = 1140;
-  steps.forEach((st, i) => {
+  steps.forEach((st, k) => {
     const label = st[0], col = st[1], hgt = st[2];
-    const t0 = 0.7 + i * 0.72;
-    const p = easeOutCubic(seg(t, t0, t0 + 0.55));
+    const p = easeOutCubic(bseg(t, i, 0.12 + k * 0.13, 0.55));
     if (p <= 0) return;
-    const h = hgt * p, x = x0 + i * (bw + gap);
+    const h = hgt * p, x = x0 + k * (bw + gap);
     ctx.save(); ctx.globalAlpha = clamp01(p * 1.5);
     shadow(ctx, 22, 10);
     const g = ctx.createLinearGradient(0, baseY - h, 0, baseY);
     g.addColorStop(0, col); g.addColorStop(1, C.seal);
-    box(ctx, x, baseY - h, bw, h, 26, i === 4 ? C.dash : g);
+    box(ctx, x, baseY - h, bw, h, 26, k === 4 ? C.dash : g);
     noShadow(ctx);
-    if (i === 4) {
+    if (k === 4) {
       ctx.save(); ctx.setLineDash([12, 10]);
       ctx.strokeStyle = C.purple; ctx.lineWidth = 5; rr(ctx, x, baseY - h, bw, h, 26); ctx.stroke(); ctx.restore();
     }
-    checkMark(ctx, x + bw / 2, baseY - h + 48, 24, i === 4 ? C.purple : C.onAccent, 9);
-    txt(ctx, label, x + bw / 2, baseY + 58, 34, i === 4 ? C.purple : C.ink, 700);
+    checkMark(ctx, x + bw / 2, baseY - h + 48, 24, k === 4 ? C.purple : C.onAccent, 9);
+    txt(ctx, label, x + bw / 2, baseY + 58, 34, k === 4 ? C.purple : C.ink, 700);
     ctx.restore();
   });
 
-  const lp = easeOutCubic(seg(t, 4.4, 5.0));
+  const lpA = bs(i, 0.76, 0.60);
+  const lp = easeOutCubic(seg(t, lpA, lpA + 0.60));
   if (lp > 0) {
     ctx.save(); ctx.globalAlpha = lp;
     let last = 0;
-    steps.forEach((st, i) => {
+    steps.forEach((st, k) => {
       const hgt = st[2];
-      const x = x0 + i * (bw + gap) + bw / 2;
+      const x = x0 + k * (bw + gap) + bw / 2;
       if (last) {
-        const p = clamp01((t - 4.4 - i * 0.16) / 0.35);
+        const p = clamp01((t - lpA - k * 0.16) / 0.35);
         if (p > 0) line(ctx, last, baseY - hgt - 40, lerp(last, x, easeOutCubic(p)), baseY - hgt - 40, 'rgba(255,138,61,0.85)', 8);
       }
       last = x;
@@ -509,20 +567,20 @@ function scene8(ctx, t, dur) {
 }
 
 /* =========================== 场景 9 · 结尾 =========================== */
-function scene9(ctx, t, dur) {
+function scene9(ctx, t, dur, i) {
   const c = SCN(8);
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, C.outroBg1); g.addColorStop(0.55, C.outroBg2); g.addColorStop(1, C.outroBg3);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = g; ctx.fillRect(-24, -24, W + 48, H + 48);   // 同 bgBase：为摄影机漂移留出 overscan
   softCircle(ctx, 540, 700, 330, C.outroGlow, 0.40 * C.glow);
 
   txt(ctx, c.title, W / 2, 380, 76, C.ink, 800);
   txt(ctx, c.sub, W / 2, 480, 56, CL(c.accent), 800);
 
-  const ap = easeOutCubic(seg(t, 0.4, 1.4));
+  const ap = easeOutCubic(bseg(t, i, 0.02, 0.90));
   if (ap > 0) drawAsset(ctx, c.asset, 540, 900, 500, { alpha: ap, rise: (1 - ap) * 40 });
 
-  const cp = easeOutBack(seg(t, 1.2, 1.9));
+  const cp = easeOutBack(bseg(t, i, 0.18, 0.60));
   if (cp > 0) {
     const label = c.cta;
     const wid = width(ctx, label, 42, 700) + 96;
@@ -595,8 +653,12 @@ function sceneIndexAt(t) {
 }
 function drawSceneInto(ctx, i, t) {
   const sc = TIMELINE[i];
+  const lt = Math.max(0, t - sc.start);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-  sceneFn(i)(ctx, Math.max(0, t - sc.start), sc.dur);
+  T = lt; SI = i;
+  ctx.save(); sceneCam(ctx, i, lt);
+  sceneFn(i)(ctx, lt, sc.dur, i);
+  ctx.restore();
   ctx.restore();
 }
 function renderFrame(t) {
@@ -614,8 +676,12 @@ function renderFrame(t) {
     blended = true;
   }
   if (!blended) {
+    const lt = Math.max(0, t - TIMELINE[i].start);
     mctx.save(); mctx.setTransform(1, 0, 0, 1, 0, 0);
-    sceneFn(i)(mctx, Math.max(0, t - TIMELINE[i].start), TIMELINE[i].dur);
+    T = lt; SI = i;                      // 不写这里的话，每镜开头 0.45s 的漂移会静止
+    mctx.save(); sceneCam(mctx, i, lt);
+    sceneFn(i)(mctx, lt, TIMELINE[i].dur, i);
+    mctx.restore();
     mctx.restore();
   }
   mctx.save(); mctx.setTransform(1, 0, 0, 1, 0, 0);
