@@ -20,7 +20,7 @@
       "desc": "存档与成片默认文件名用，不出现在画面里"
     },
     "style": {
-      "type": "enum", "values": ["warm", "dark"], "default": "warm",
+      "type": "enum", "values": ["warm", "dark", "tech"], "default": "warm",
       "label": "皮肤",
       "desc": "整体配色，对应 styles/<名>.json"
     },
@@ -37,7 +37,7 @@
     "voice": {
       "type": "string", "default": "zh-CN-XiaoxiaoNeural",
       "label": "配音音色",
-      "desc": "edge-tts 音色 id，常用值见 voices"
+      "desc": "edge-tts 音色 id，常用值见 voices。改变它会重做全部配音"
     },
     "rate": {
       "type": "string", "pattern": "^[+-][0-9]+%$", "default": "+0%",
@@ -57,12 +57,13 @@
     "pace": {
       "type": "object",
       "label": "节奏",
-      "desc": "每镜留白与转场时长。调它只改时长不改画面，是最便宜的「利落 / 从容」开关",
+      "desc": "每镜留白、转场时长与撞击闪光。前三项只改时长不改画面，是最便宜的「利落 / 从容」开关；后两项改画面",
       "fields": {
         "lead":       { "type": "number", "min": 0,    "max": 2, "default": 0.30, "label": "配音前留白", "desc": "秒。徽标、大标题在这段里落位" },
         "tail":       { "type": "number", "min": 0.10, "max": 2, "default": 0.36, "label": "配音后留白", "desc": "秒。除最后一镜外每镜尾部" },
         "lastTail":   { "type": "number", "min": 0.10, "max": 4, "default": 1.20, "label": "末镜后留白", "desc": "秒。给收尾留的时间" },
-        "transition": { "type": "number", "min": 0,    "max": 1.5, "default": 0.45, "label": "转场时长", "desc": "秒。相邻两镜的交叉溶解" }
+        "transition": { "type": "number", "min": 0,    "max": 1.5, "default": 0.45, "label": "转场时长", "desc": "秒。相邻两镜的混合窗口宽度，花样（溶解/左右滑/上滑/擦除/横带）按进镜的 tpl 自动选。写 0 = 硬切" },
+        "flash":      { "type": "number", "min": 0,    "max": 1.5, "default": 0.11, "label": "撞击闪光", "desc": "秒。每镜主体开始落位时叠一层全屏强调色。写 0 = 关闭，换镜就是干净的硬切" }
       }
     }
   },
@@ -75,7 +76,8 @@
       "card", "onAccent", "soft", "dash", "seal", "headFrom", "sheen",
       "coin", "coinEdge", "coinInk", "hudTrack", "hudChip",
       "subBg", "subInk", "subShadow", "lineA", "splitLeft", "splitRight",
-      "walletDot", "outroBg1", "outroBg2", "outroBg3", "outroGlow", "glow"
+      "walletDot", "outroBg1", "outroBg2", "outroBg3", "outroGlow", "glow",
+      "vignette", "grain", "gridInk", "scanInk", "fontNum"
     ],
     "_note": "accent 是每镜能选的强调色名；themeKeys 是 content 顶层 theme 与 styles/*.json 里允许出现的键，必须与 engine.js 的 C 对象一致（build_content.py 会核对）"
   },
@@ -97,8 +99,8 @@
         "file": { "type": "string", "required": true }
       }
     },
-    "min": 1,
-    "_note": "每镜的 asset 字段只能引用这里的 name。name 与 file 都要在，文件要真实存在"
+    "min": 0,
+    "_note": "每镜的 asset 字段只能引用这里的 name。name 与 file 都要在，文件要真实存在。可以整份省略（无插画片子），也可以空数组"
   },
 
   "scenes": {
@@ -125,6 +127,11 @@
         "type": "string", "required": true, "minLen": 6, "maxLen": 60,
         "label": "解说词",
         "desc": "会被转成配音和字幕。12–40 字，口语，不用书面词、不出现分号"
+      },
+      "energy": {
+        "type": "enum", "values": ["high", "low"],
+        "label": "节奏强度",
+        "desc": "不填按 high。high = 重音镜：进镜有撞击闪光 + 横抖，弹性缓动。low = 过渡镜：不闪不抖，入场曲线也换成最平的，用来给重音镜让出对比。整片都是 high 就等于没有节奏"
       }
     },
     "tpl": {
@@ -134,7 +141,7 @@
         "fields": {
           "title":  { "type": "string", "required": true, "label": "大标题", "desc": "两行大字，8–12 字" },
           "sub":    { "type": "string", "required": true, "label": "副标题", "desc": "一行，6–10 字" },
-          "asset":  { "type": "asset",  "required": true, "label": "插画" },
+          "asset":  { "type": "asset",  "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "popups": {
             "type": "list", "required": true, "min": 4, "max": 14, "label": "弹窗雨",
             "desc": "每项 [文案, 颜色, 横向位置, 速度]。位置 100–980，速度 0.8–1.3 左右，雨点要散布开。**弹窗按数组下标错峰下落（间距 220px），前 4 条起步时正好在大标题那一带**，所以它们的横向位置要贴边放（≤200 或 ≥880），否则会从标题上压过去；第 5 条起从标题下方起步，位置随意",
@@ -148,7 +155,7 @@
         "desc": "左上序号徽标 → 上部插画 → 中部大数字卡片 → 底部条幅",
         "fields": {
           "badge":  { "type": "badge",  "required": true, "label": "序号徽标" },
-          "asset":  { "type": "asset",  "required": true, "label": "插画" },
+          "asset":  { "type": "asset",  "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "card":   {
             "type": "object", "required": true, "label": "大数字卡片",
             "fields": {
@@ -167,7 +174,7 @@
         "desc": "序号徽标 + 中部插画 + 两枚白色胶囊",
         "fields": {
           "badge": { "type": "badge", "required": true, "label": "序号徽标" },
-          "asset": { "type": "asset", "required": true, "label": "插画" },
+          "asset": { "type": "asset", "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "chips": {
             "type": "list", "required": true, "min": 2, "max": 2, "label": "胶囊",
             "desc": "每项 [文案, 解说进度0-1, 横向中心x, 纵向中心y, 颜色]。两枚的 y 用 1116 / 1268",
@@ -181,7 +188,7 @@
         "desc": "序号徽标 + 上部插画 + 左右分割费用条 + 斜纹高亮面板 + 金币入库",
         "fields": {
           "badge": { "type": "badge", "required": true, "label": "序号徽标" },
-          "asset": { "type": "asset", "required": true, "label": "插画" },
+          "asset": { "type": "asset", "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "bar":   {
             "type": "tuple", "required": true, "of": ["string", "string"], "labels": ["左段", "右段"],
             "label": "费用条两段文案",
@@ -201,7 +208,7 @@
         "desc": "序号徽标 + 顶部保额卡（数字滚动）+ 右侧插画 + 左侧三枚标签 + 左下警示徽标",
         "fields": {
           "badge": { "type": "badge", "required": true, "label": "序号徽标" },
-          "asset": { "type": "asset", "required": true, "label": "插画" },
+          "asset": { "type": "asset", "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "value": {
             "type": "object", "required": true, "label": "保额卡",
             "fields": {
@@ -219,7 +226,7 @@
             "item": { "type": "tuple", "of": ["string", "fraction", "number"],
                       "labels": ["文案", "出现时机", "纵向中心y"] }
           },
-          "warn": { "type": "string", "required": true, "label": "警示徽标", "desc": "2–6 字。落位后会被一道红杠划掉，所以要填**要否定的做法**，不是提示——填「返还型」读作「✗ 返还型」，填「从右往左」会读成「✗ 从右往左」" }
+          "warn": { "type": "string", "required": false, "label": "警示徽标", "desc": "选填，2–6 字，**默认不填**——多数片子不需要它，不填就在左下角什么都不画。填了就出一枚红框徽标、文字左边站一个 ✗，所以要填**要否定的做法**，不是提示：填「返还型」读作「✗ 返还型」。不要它就把整个 warn 键删掉，别写空字符串" }
         }
       },
       "pitfalls": {
@@ -240,7 +247,7 @@
         "desc": "序号徽标 + 中部插画 + 三枚金币下落 + 右上角提示胶囊",
         "fields": {
           "badge": { "type": "badge", "required": true, "label": "序号徽标" },
-          "asset": { "type": "asset", "required": true, "label": "插画" },
+          "asset": { "type": "asset", "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "note":  { "type": "string", "required": true, "label": "提示胶囊", "desc": "如「保障做齐，再谈理财」" }
         }
       },
@@ -265,7 +272,7 @@
         "fields": {
           "title": { "type": "string", "required": true, "label": "主标题", "desc": "把结论压成一句口诀" },
           "sub":   { "type": "string", "required": true, "label": "副标题" },
-          "asset": { "type": "asset", "required": true, "label": "插画" },
+          "asset": { "type": "asset", "required": false, "label": "插画", "desc": "留空 = 无插画几何版式。要么填 assets 里的合法素材名，要么把整个 asset 键删掉（空字符串 \"\" 会报错）" },
           "cta":   { "type": "string", "required": true, "label": "关注胶囊", "desc": "一句大白话 + 一个利益点" }
         }
       }

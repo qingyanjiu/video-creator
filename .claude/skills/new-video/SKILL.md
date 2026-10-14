@@ -94,13 +94,13 @@ s2  大数字步骤   第一步，少儿医保，出生就去办……        �
 | `meta.fps` | 30 | 别问。除非用户提了渲染太慢或文件太大，才给 24 |
 | `meta.pace` | 全默认 | 别问。用户说"太赶/太拖"时才给档位 |
 
-**节奏只在用户抱怨时才动**。默认那套（lead 0.30 / tail 0.36 / lastTail 1.20 / transition 0.45）是调过的，别自作主张。
+**节奏只在用户抱怨时才动**。默认那套（lead 0.30 / tail 0.36 / lastTail 1.20 / transition 0.45 / flash 0.11）是调过的，别自作主张。
 
 ## 第 4 步 · 写 JSON 并校验
 
 写 `content/<slug>.json`，结构完全照 `content/child-insurance.json`——`meta` / `assets` / `scenes` 三块，不要多写 `theme`（除非用户明确说要单片微调颜色，那才加顶层 `theme`，键从 schema 的 `colors.themeKeys` 里选）。
 
-`assets` 直接复用现有的 7 张插画（`ls src/assets/*.svg` 看有哪些），每张在新片里都要重新列一遍 `{name, file}`。**没有合适的插画不要自己造**——告诉用户缺什么，让他决定是换主题还是加素材。
+`assets` 直接复用现有的 7 张插画（`ls src/assets/*.svg` 看有哪些），每张在新片里都要重新列一遍 `{name, file}`。**没有合适的插画不要自己造**——插画现在**可以不放**：把那一镜的 `asset` 键整个删掉，版式会画一个几何母题顶上去（见 `docs/01` 的插画说明），`assets` 也可以整份省略。所以"缺素材"不再是死路，跟用户说一声删掉即可。注意**不要填空字符串**（`""` 会报错）。
 
 然后校验：
 
@@ -145,7 +145,9 @@ python3 scripts/pipe.py all content/<slug>.json --name "<meta.title>"
 
 | 用户说 | 改什么 | 代价 |
 |---|---|---|
-| "太赶了 / 太拖了" | `meta.pace` 的 `lead`/`tail`/`lastTail`/`transition` | 只重渲染，不重配音 |
+| "太赶了 / 还没看清就过去了" | `meta.pace` 的 `tail`（首选，直接买到静止时间）与 `lead`；还不够就 `meta.rate` 降速 | 前两项只重渲染；`rate` 要重做全部配音 |
+| "太拖了" | `meta.pace` 的 `lead`/`tail`/`lastTail` 往回收 | 只重渲染，不重配音 |
+| "切镜太花 / 每屏闪一下" | `meta.pace` 的 `transition`/`flash`（都写 0 = 干净硬切） | 只重渲染，不重配音 |
 | "换个配色" | `meta.style` | 只重渲染 |
 | "这个颜色不喜欢" | 那一镜的 `accent`，或顶层 `theme` 微调 | 只重渲染 |
 | "声音不好听 / 念太快" | `meta.voice` / `meta.rate` | **全部配音重做** |
@@ -160,7 +162,7 @@ python3 scripts/pipe.py all content/<slug>.json --name "<meta.title>"
 
 | 现象 | 原因 |
 |---|---|
-| `build_content.py` 报"没有这个插画" | `asset` 名不在 `assets` 里，或文件不存在 |
+| `build_content.py` 报"没有这个插画" | `asset` 名不在 `assets` 里，或文件不存在。想不放插画就**删掉整个 `asset` 键**，空字符串 `""` 也会报这个错 |
 | 报"未知字段 xxx" | 该 tpl 没有这个字段，或拼错了。schema 里 `scenes.tpl.<名>.fields` 是准的 |
 | 报"theme 里多出 xxx" | token 名不在 `colors.themeKeys` 里 |
 | 报 schema 和 engine 对不上 | 有人加了颜色 token 没同步 `content/schema.json`，这是**真 bug**，报告用户，别自己改 engine |

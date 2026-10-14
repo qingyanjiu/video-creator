@@ -31,6 +31,12 @@ const INIT = function () {
     } catch (e) {}
     return origImg.apply(this, arguments);
   };
+  /* 无插画版式画的是几何母题，一次 drawImage 都不发——probe 看不见它们，
+     越界就永远是假绿。母题自己用 engine.js 的 gbox() 报到这儿来。
+     nat 挂 'geom:<母题名>'，会被下面 `o.w < 1000 && o.nat !== 'canvas'` 的
+     img 过滤器自动放行，所以 OUT-OF-BAND 与遮挡检查都不用改判读逻辑。 */
+  window.__geomBox = (x, y, w, h, tag, a) =>
+    window.__dbg.push({ k: 'img', x: x, y: y, w: w, h: h, a: a === undefined ? 1 : a, nat: 'geom:' + tag });
 };
 
 function inter(a, b) {

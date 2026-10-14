@@ -16,6 +16,8 @@
     "lineA": "rgba(77,166,255,0.20)", "splitLeft": "rgba(56,224,176,0.80)", "splitRight": "rgba(255,162,77,0.80)",
     "walletDot": "#FFE0C2",
     "outroBg1": "#0B1220", "outroBg2": "#101A2E", "outroBg3": "#16233C", "outroGlow": "#4DA6FF",
-    "shadow": "rgba(0,0,0,0.55)", "glow": 2.4
+    "shadow": "rgba(0,0,0,0.55)", "glow": 2.4,
+    "vignette": "rgba(0,0,0,0.45)", "grain": 0.022,
+    "gridInk": "rgba(0,0,0,0)", "scanInk": "rgba(0,0,0,0)"
   }
 }

@@ -91,5 +91,6 @@ async function energy(t0, t1) {
       (isFinite(t) ? t.toFixed(3).padStart(10) : '         -') + '   ' +
       (isFinite(ratio) ? (ratio * 100).toFixed(0).padStart(4) + '%' : '   -') + flag);
   }
-  console.log(dead ? ('\n' + dead + ' 镜尾部动能量 < 0.35，画面接近静止') : '\n所有镜头尾部都有可见的持续运动');
+  console.log(dead ? ('\n' + dead + ' 镜尾部动能量 < ' + MIN_TAIL + '，画面接近静止')
+                   : '\n所有镜头尾部都有可见的持续运动');
 })();

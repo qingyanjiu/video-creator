@@ -16,6 +16,8 @@
     "lineA": "rgba(91,168,245,0.30)", "splitLeft": "rgba(79,195,161,0.85)", "splitRight": "rgba(255,138,61,0.85)",
     "walletDot": "#FFE0C2",
     "outroBg1": "#FFF6E8", "outroBg2": "#FFE7CE", "outroBg3": "#FFD9BC", "outroGlow": "#FFC24B",
-    "shadow": "rgba(122,92,62,0.20)", "glow": 1
+    "shadow": "rgba(122,92,62,0.20)", "glow": 1,
+    "vignette": "rgba(120,88,62,0.20)", "grain": 0.035,
+    "gridInk": "rgba(0,0,0,0)", "scanInk": "rgba(0,0,0,0)"
   }
 }

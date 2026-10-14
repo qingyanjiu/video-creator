@@ -20,7 +20,8 @@ def decode(path):
 
 voice = np.zeros(N + SR)
 for sc in data["scenes"]:
-    a = decode(os.path.join(WORK, "tts", sc["id"] + ".mp3")) * 0.85
+    # 用 build_content.py 写下的绝对路径。老 timeline.json 里没有 file 才回退到旧拼法。
+    a = decode(sc.get("file") or os.path.join(WORK, "tts", sc["id"] + ".mp3")) * 0.85
     s0 = int(sc["speechStart"] * SR)
     voice[s0:s0 + len(a)] += a
 voice = voice[:N]

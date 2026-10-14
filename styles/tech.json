@@ -1,0 +1,24 @@
+{
+  "name": "tech",
+  "label": "深空科技风",
+  "theme": {
+    "orange": "#FFB020", "coral": "#FF6B8A", "mint": "#2EE6B0", "blue": "#4DA6FF",
+    "red": "#FF5470", "purple": "#B388FF", "yellow": "#FFD84D",
+    "bg": "#060A14", "bg2": "#0C1526", "ink": "#E6F0FF", "ink2": "#8FA6C8"
+  },
+  "tokens": {
+    "card": "rgba(16,26,44,0.92)", "onAccent": "#05070D",
+    "soft": "rgba(255,84,112,0.18)", "dash": "rgba(179,136,255,0.18)", "seal": "rgba(6,10,20,0.55)",
+    "headFrom": "#7FE3FF", "sheen": "rgba(255,255,255,0.06)",
+    "coin": "#FFD84D", "coinEdge": "#C9A21F", "coinInk": "#2A1F00",
+    "hudTrack": "rgba(255,255,255,0.10)", "hudChip": "rgba(255,255,255,0.07)",
+    "subBg": "rgba(8,12,22,0.88)", "subInk": "#E6F0FF", "subShadow": "rgba(0,0,0,0.60)",
+    "lineA": "rgba(77,166,255,0.22)", "splitLeft": "rgba(46,230,176,0.80)", "splitRight": "rgba(255,176,32,0.80)",
+    "walletDot": "#FFE8C2",
+    "outroBg1": "#060A14", "outroBg2": "#0A1220", "outroBg3": "#101B30", "outroGlow": "#4DA6FF",
+    "shadow": "rgba(0,0,0,0.60)", "glow": 3,
+    "vignette": "rgba(0,0,0,0.50)", "grain": 0.02,
+    "gridInk": "rgba(77,166,255,0.10)", "scanInk": "rgba(46,230,176,0.05)",
+    "fontNum": "\"SF Mono\",\"JetBrains Mono\",\"Cascadia Mono\",Consolas,\"Noto Sans SC\",monospace"
+  }
+}

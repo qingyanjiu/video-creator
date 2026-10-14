@@ -6,9 +6,10 @@
     "brand": "二进制小课堂",
     "disclaimer": "本片仅为计算机知识科普。",
     "voice": "zh-CN-YunxiNeural",
-    "rate": "+8%",
+    "rate": "+0%",
     "fps": 30,
-    "assetBase": "../src/assets/"
+    "assetBase": "../src/assets/",
+    "pace": { "lead": 0.45, "tail": 1.20, "transition": 0, "flash": 0 }
   },
   "assets": [
     { "name": "coding", "file": "coding.svg" },
@@ -83,8 +84,7 @@
         ["8", 0.26, 780],
         ["2", 0.38, 895],
         ["1", 0.5, 1010]
-      ],
-      "warn": "从左往右读"
+      ]
     },
     {
       "id": "s5",
