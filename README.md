@@ -25,7 +25,7 @@
 | `setenv.ps1` | 复用已有依赖时，一键配好 `PYTHONPATH` / `NODE_PATH` | ❌ |
 | `run.ps1` | 一键出片（Windows） | ❌ |
 | `scripts/pipe.py` | 一键出片的跨平台版（mac / Linux / Windows 都能跑） | ❌ |
-| `.claude/skills/new-video/` | 让 Claude Code 直接出片：问需求 → 逐项确认 → 生成 → 抽帧确认 → 出片 | ❌ |
+| `.claude/skills/make-video/` | 让 Claude Code 直接出片：问需求 → 逐项确认 → 生成 → 抽帧确认 → 出片 | ❌ |
 | `tts/<slug>/` | **生成物**：配音 mp3 + 时长缓存（按片名分目录，见下） | ❌ |
 | `out/` | **生成物**：渲染帧与成片 | ❌ |
 | `docs/` | 提示词、版式说明、流程、踩坑记录 | — |
@@ -100,7 +100,7 @@ python3 scripts/pipe.py all content/child-insurance.json --name "给孩子买保
 
 ### 让 Claude Code 出片
 
-仓库里带了 skill `.claude/skills/new-video/`。在项目里对 Claude Code 说"做一条关于 X 的科普视频"，
+仓库里带了 skill `.claude/skills/make-video/`（也可以直接敲 `/make-video`）。在项目里对 Claude Code 说"做一条关于 X 的科普视频"，
 它会读 `content/schema.json`，把主题、品牌胶囊、免责声明、配色、音色问清楚，起草 9 镜分镜给你改，
 落成 `content/<slug>.json`，跑校验，**抽 6 帧给你看过之后**才做全量渲染。
 
