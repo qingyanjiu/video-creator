@@ -14,6 +14,8 @@ outputs/
 audio.m4a
 mix.wav
 bgm.wav
+frames/
+stills/
 
 # 依赖（本地安装）
 deps/
